@@ -1,0 +1,34 @@
+package br.com.fpo.sgc.domain.audit;
+
+import br.com.fpo.sgc.domain.audit.dto.AuditLogResponseDTO;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/v1/audit-logs")
+@RequiredArgsConstructor
+@Tag(name = "Auditoria", description = "Endpoints para consulta do histórico e logs do sistema")
+public class AuditLogController {
+
+    private final AuditLogService auditLogService;
+
+    @GetMapping
+    public ResponseEntity<Page<AuditLogResponseDTO>> findAll(
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(auditLogService.findAll(pageable));
+    }
+
+    @GetMapping("/{entityName}/{entityId}")
+    public ResponseEntity<Page<AuditLogResponseDTO>> findByEntity(
+            @PathVariable String entityName,
+            @PathVariable Long entityId,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(auditLogService.findByEntity(entityName, entityId, pageable));
+    }
+}

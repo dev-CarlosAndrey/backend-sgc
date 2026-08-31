@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: sgc-api
+
+  # Configuração da Base de Dados (MySQL)
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/sgc_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # Configuração do JPA / Hibernate
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  # Configuração do Flyway para Versionamento do Banco de Dados
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+  # Configuração de upload de arquivos (multipart)
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
+
+# Configurações do Servidor Tomcat
+server:
+  port: ${PORT:8080}
+
+# Configuração de armazenamento de arquivos enviados (uploads)
+app:
+  upload:
+    dir: ${UPLOAD_DIR:uploads}
+
+# Configuração customizada para integração da Evolution API (WhatsApp)
+evolution:
+  api:
+    base-url: ${EVOLUTION_API_URL:http://localhost:8080}
+    api-key: ${EVOLUTION_API_KEY:sua_chave_secreta_aqui}
+    instance-name: ${EVOLUTION_INSTANCE_NAME:sgc-instance}
+
+# Configuração de Segurança (JWT)
+api:
+  security:
+    token:
+      secret: ${JWT_SECRET:my-secret-key-fpo-sgc-2026-super-segura}

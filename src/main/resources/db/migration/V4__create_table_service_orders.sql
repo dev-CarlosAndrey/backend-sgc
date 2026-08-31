@@ -1,0 +1,20 @@
+CREATE TABLE tb_service_orders (
+                                   id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                                   title VARCHAR(150) NOT NULL,
+                                   description TEXT NOT NULL,
+                                   status VARCHAR(30) NOT NULL,
+                                   priority VARCHAR(30) NOT NULL,
+                                   requester_id BIGINT NOT NULL,
+                                   technician_id BIGINT,
+                                   asset_id BIGINT,
+                                   sector_id BIGINT NOT NULL,
+                                   solution_details TEXT,
+                                   closed_at TIMESTAMP NULL,
+                                   active BOOLEAN NOT NULL DEFAULT TRUE,
+                                   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                   updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+                                   CONSTRAINT fk_so_requester FOREIGN KEY (requester_id) REFERENCES tb_users(id),
+                                   CONSTRAINT fk_so_technician FOREIGN KEY (technician_id) REFERENCES tb_users(id),
+                                   CONSTRAINT fk_so_asset FOREIGN KEY (asset_id) REFERENCES tb_assets(id),
+                                   CONSTRAINT fk_so_sector FOREIGN KEY (sector_id) REFERENCES tb_sectors(id)
+);
