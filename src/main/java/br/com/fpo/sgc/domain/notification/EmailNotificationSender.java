@@ -1,5 +1,6 @@
 package br.com.fpo.sgc.domain.notification;
 
+import br.com.fpo.sgc.domain.serviceorder.ServiceOrderStatus;
 import br.com.fpo.sgc.domain.user.User;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,13 +61,16 @@ public class EmailNotificationSender implements NotificationSender {
     }
 
     @Override
-    public void send(User recipient, String subject, String message) {
+    public void send(User recipient, String subject, String message, ServiceOrderStatus status) {
         Map<String, Object> body = Map.of(
                 "personalizations", List.of(Map.of("to", List.of(
                         Map.of("email", recipient.getEmail(), "name", recipient.getName())))),
                 "from", Map.of("email", fromEmail, "name", fromName),
                 "subject", subject,
-                "content", List.of(Map.of("type", "text/plain", "value", message)));
+                // SendGrid exige text/plain antes de text/html
+                "content", List.of(
+                        Map.of("type", "text/plain", "value", message),
+                        Map.of("type", "text/html", "value", ServiceOrderEmailTemplate.render(recipient.getName(), subject, message, status))));
 
         // 202 Accepted em caso de sucesso; 4xx/5xx viram RestClientResponseException, tratada pelo NotificationService.
         restClient.post()

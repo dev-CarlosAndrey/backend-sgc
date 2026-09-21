@@ -1,6 +1,7 @@
 package br.com.fpo.sgc.domain.notification;
 
 import br.com.fpo.sgc.domain.serviceorder.ServiceOrder;
+import br.com.fpo.sgc.domain.serviceorder.ServiceOrderStatus;
 import br.com.fpo.sgc.domain.user.User;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,11 +42,12 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
-    public boolean notifyUser(ServiceOrder serviceOrder, User recipient, String subject, String message) {
-        if (deliver(NotificationChannel.WHATSAPP, serviceOrder, recipient, subject, message)) {
+    public boolean notifyUser(ServiceOrder serviceOrder, User recipient, String subject, String message,
+                              ServiceOrderStatus status) {
+        if (deliver(NotificationChannel.WHATSAPP, serviceOrder, recipient, subject, message, status)) {
             return true;
         }
-        if (fallbackEnabled && deliver(NotificationChannel.EMAIL, serviceOrder, recipient, subject, message)) {
+        if (fallbackEnabled && deliver(NotificationChannel.EMAIL, serviceOrder, recipient, subject, message, status)) {
             return true;
         }
         log.warn("Notificação da OS {} não entregue ao usuário {} por nenhum canal disponível",
@@ -55,7 +57,7 @@ public class NotificationServiceImpl implements NotificationService {
 
     // Tenta um canal até maxAttempts vezes com backoff linear; false se o canal não existe, não se aplica ou falhou.
     private boolean deliver(NotificationChannel channel, ServiceOrder serviceOrder, User recipient,
-                            String subject, String message) {
+                            String subject, String message, ServiceOrderStatus status) {
         NotificationSender sender = senders.get(channel);
         if (sender == null || !sender.canSend(recipient)) {
             return false;
@@ -63,7 +65,7 @@ public class NotificationServiceImpl implements NotificationService {
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                sender.send(recipient, subject, message);
+                sender.send(recipient, subject, message, status);
                 record(serviceOrder, recipient, channel, NotificationStatus.SENT, attempt, null);
                 return true;
             } catch (Exception e) {

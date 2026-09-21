@@ -39,7 +39,7 @@ public class ServiceOrderNotificationListener {
             String subject = "OS #" + so.getId() + " - " + so.getTitle();
             String message = buildMessage(so, event);
             for (User recipient : recipients(so)) {
-                notificationService.notifyUser(so, recipient, subject, message);
+                notificationService.notifyUser(so, recipient, subject, message, event.status());
             }
         } catch (Exception e) {
             log.error("Erro ao disparar notificações da OS {}", event.serviceOrderId(), e);

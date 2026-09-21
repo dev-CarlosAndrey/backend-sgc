@@ -1,6 +1,7 @@
 package br.com.fpo.sgc.domain.notification;
 
 import br.com.fpo.sgc.domain.serviceorder.ServiceOrder;
+import br.com.fpo.sgc.domain.serviceorder.ServiceOrderStatus;
 import br.com.fpo.sgc.domain.user.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,9 +49,9 @@ class NotificationServiceImplTest {
 
     @Test
     void whatsappSucesso_naoAcionaEmail() {
-        assertTrue(service(true, whatsapp, email).notifyUser(order, user, "s", "m"));
+        assertTrue(service(true, whatsapp, email).notifyUser(order, user, "s", "m", ServiceOrderStatus.OPEN));
 
-        verify(email, never()).send(any(), any(), any());
+        verify(email, never()).send(any(), any(), any(), any());
         List<Notification> records = saved(1);
         assertEquals(NotificationChannel.WHATSAPP, records.get(0).getChannel());
         assertEquals(NotificationStatus.SENT, records.get(0).getDeliveryStatus());
@@ -58,12 +59,12 @@ class NotificationServiceImplTest {
 
     @Test
     void whatsappFalhaSempre_retentaEDepoisUsaEmail() {
-        doThrow(new RuntimeException("token expirado")).when(whatsapp).send(any(), any(), any());
+        doThrow(new RuntimeException("token expirado")).when(whatsapp).send(any(), any(), any(), any());
 
-        assertTrue(service(true, whatsapp, email).notifyUser(order, user, "s", "m"));
+        assertTrue(service(true, whatsapp, email).notifyUser(order, user, "s", "m", ServiceOrderStatus.OPEN));
 
-        verify(whatsapp, times(3)).send(any(), any(), any());
-        verify(email, times(1)).send(any(), any(), any());
+        verify(whatsapp, times(3)).send(any(), any(), any(), any());
+        verify(email, times(1)).send(any(), any(), any(), any());
         List<Notification> records = saved(4);
         assertEquals(3, records.stream().filter(n -> n.getChannel() == NotificationChannel.WHATSAPP
                 && n.getDeliveryStatus() == NotificationStatus.FAILED).count());
@@ -74,11 +75,11 @@ class NotificationServiceImplTest {
 
     @Test
     void whatsappFalhaUmaVez_recuperaNaRetentativaSemEmail() {
-        doThrow(new RuntimeException("timeout")).doNothing().when(whatsapp).send(any(), any(), any());
+        doThrow(new RuntimeException("timeout")).doNothing().when(whatsapp).send(any(), any(), any(), any());
 
-        assertTrue(service(true, whatsapp, email).notifyUser(order, user, "s", "m"));
+        assertTrue(service(true, whatsapp, email).notifyUser(order, user, "s", "m", ServiceOrderStatus.OPEN));
 
-        verify(email, never()).send(any(), any(), any());
+        verify(email, never()).send(any(), any(), any(), any());
         List<Notification> records = saved(2);
         assertEquals(NotificationStatus.FAILED, records.get(0).getDeliveryStatus());
         assertEquals(NotificationStatus.SENT, records.get(1).getDeliveryStatus());
@@ -87,11 +88,11 @@ class NotificationServiceImplTest {
 
     @Test
     void fallbackDesabilitado_naoUsaEmail() {
-        doThrow(new RuntimeException("falha")).when(whatsapp).send(any(), any(), any());
+        doThrow(new RuntimeException("falha")).when(whatsapp).send(any(), any(), any(), any());
 
-        assertFalse(service(false, whatsapp, email).notifyUser(order, user, "s", "m"));
+        assertFalse(service(false, whatsapp, email).notifyUser(order, user, "s", "m", ServiceOrderStatus.OPEN));
 
-        verify(email, never()).send(any(), any(), any());
+        verify(email, never()).send(any(), any(), any(), any());
         saved(3);
     }
 
@@ -99,15 +100,15 @@ class NotificationServiceImplTest {
     void semTelefone_vaiDiretoParaEmail() {
         when(whatsapp.canSend(user)).thenReturn(false);
 
-        assertTrue(service(true, whatsapp, email).notifyUser(order, user, "s", "m"));
+        assertTrue(service(true, whatsapp, email).notifyUser(order, user, "s", "m", ServiceOrderStatus.OPEN));
 
-        verify(whatsapp, never()).send(any(), any(), any());
+        verify(whatsapp, never()).send(any(), any(), any(), any());
         assertEquals(NotificationChannel.EMAIL, saved(1).get(0).getChannel());
     }
 
     @Test
     void nenhumCanalDisponivel_retornaFalsoSemRegistros() {
-        assertFalse(service(true).notifyUser(order, user, "s", "m"));
+        assertFalse(service(true).notifyUser(order, user, "s", "m", ServiceOrderStatus.OPEN));
 
         verify(repository, never()).save(any());
     }

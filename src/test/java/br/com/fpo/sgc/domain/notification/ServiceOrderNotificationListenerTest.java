@@ -43,8 +43,8 @@ class ServiceOrderNotificationListenerTest {
         listener.onServiceOrderEvent(new ServiceOrderEvent(10L, ServiceOrderEventType.TECHNICIAN_ASSIGNED, ServiceOrderStatus.IN_PROGRESS));
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
-        verify(notificationService).notifyUser(any(), eq(requester), eq("OS #10 - Projetor"), message.capture());
-        verify(notificationService).notifyUser(any(), eq(technician), any(), any());
+        verify(notificationService).notifyUser(any(), eq(requester), eq("OS #10 - Projetor"), message.capture(), eq(ServiceOrderStatus.IN_PROGRESS));
+        verify(notificationService).notifyUser(any(), eq(technician), any(), any(), any());
         assertTrue(message.getValue().contains("Téc"));
     }
 
@@ -54,8 +54,8 @@ class ServiceOrderNotificationListenerTest {
 
         listener.onServiceOrderEvent(new ServiceOrderEvent(10L, ServiceOrderEventType.CREATED, ServiceOrderStatus.OPEN));
 
-        verify(notificationService, times(1)).notifyUser(any(), any(), any(), any());
-        verify(notificationService).notifyUser(any(), eq(requester), any(), any());
+        verify(notificationService, times(1)).notifyUser(any(), any(), any(), any(), any());
+        verify(notificationService).notifyUser(any(), eq(requester), any(), any(), any());
     }
 
     @Test
@@ -64,7 +64,7 @@ class ServiceOrderNotificationListenerTest {
 
         listener.onServiceOrderEvent(new ServiceOrderEvent(10L, ServiceOrderEventType.STATUS_CHANGED, ServiceOrderStatus.CANCELLED));
 
-        verify(notificationService, times(1)).notifyUser(any(), any(), any(), any());
+        verify(notificationService, times(1)).notifyUser(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -74,14 +74,14 @@ class ServiceOrderNotificationListenerTest {
 
         listener.onServiceOrderEvent(new ServiceOrderEvent(10L, ServiceOrderEventType.RESOLVED, ServiceOrderStatus.RESOLVED));
 
-        verify(notificationService, never()).notifyUser(any(), eq(technician), any(), any());
-        verify(notificationService).notifyUser(any(), eq(requester), any(), any());
+        verify(notificationService, never()).notifyUser(any(), eq(technician), any(), any(), any());
+        verify(notificationService).notifyUser(any(), eq(requester), any(), any(), any());
     }
 
     @Test
     void falhaNaNotificacao_naoPropaga() {
         order(technician);
-        when(notificationService.notifyUser(any(), any(), any(), any())).thenThrow(new RuntimeException("boom"));
+        when(notificationService.notifyUser(any(), any(), any(), any(), any())).thenThrow(new RuntimeException("boom"));
 
         assertDoesNotThrow(() -> listener.onServiceOrderEvent(
                 new ServiceOrderEvent(10L, ServiceOrderEventType.CREATED, ServiceOrderStatus.OPEN)));

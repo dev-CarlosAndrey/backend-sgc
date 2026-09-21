@@ -1,5 +1,6 @@
 package br.com.fpo.sgc.domain.notification;
 
+import br.com.fpo.sgc.domain.serviceorder.ServiceOrderStatus;
 import br.com.fpo.sgc.domain.user.User;
 
 /**
@@ -13,6 +14,9 @@ public interface NotificationSender {
     /** Indica se o destinatário possui o dado de contato exigido por este canal (telefone, e-mail...). */
     boolean canSend(User recipient);
 
-    /** Envia a mensagem; qualquer falha de entrega deve ser propagada como exceção. */
-    void send(User recipient, String subject, String message);
+    /**
+     * Envia a mensagem; qualquer falha de entrega deve ser propagada como exceção. O status da OS permite
+     * ao canal adaptar a apresentação (cor, rótulo, progresso).
+     */
+    void send(User recipient, String subject, String message, ServiceOrderStatus status);
 }
