@@ -34,6 +34,13 @@ public class ServiceOrderController {
         return ResponseEntity.ok(serviceOrderService.findAll(pageable));
     }
 
+    @GetMapping("/asset/{assetId}")
+    public ResponseEntity<Page<ServiceOrderResponseDTO>> findByAssetId(
+            @PathVariable Long assetId,
+            @PageableDefault(size = 10, sort = "createdAt") Pageable pageable) {
+        return ResponseEntity.ok(serviceOrderService.findByAssetId(assetId, pageable));
+    }
+
     @PatchMapping("/{id}/assign-technician/{technicianId}")
     public ResponseEntity<ServiceOrderResponseDTO> assignTechnician(
             @PathVariable Long id,

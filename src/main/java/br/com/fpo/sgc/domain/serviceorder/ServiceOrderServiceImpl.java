@@ -88,6 +88,12 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Page<ServiceOrderResponseDTO> findByAssetId(Long assetId, Pageable pageable) {
+        return serviceOrderRepository.findByAssetIdAndActiveTrue(assetId, pageable).map(serviceOrderMapper::toDTO);
+    }
+
+    @Override
     @Transactional
     public ServiceOrderResponseDTO assignTechnician(Long id, Long technicianId) {
         ServiceOrder so = serviceOrderRepository.findById(id)

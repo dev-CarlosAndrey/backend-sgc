@@ -10,6 +10,7 @@ public interface ServiceOrderService {
     ServiceOrderResponseDTO findById(Long id);
     Page<ServiceOrderResponseDTO> findAll(Pageable pageable);
     Page<ServiceOrderResponseDTO> findByStatus(ServiceOrderStatus status, Pageable pageable);
+    Page<ServiceOrderResponseDTO> findByAssetId(Long assetId, Pageable pageable);
     ServiceOrderResponseDTO assignTechnician(Long id, Long technicianId);
     ServiceOrderResponseDTO resolveOrder(Long id, String solutionDetails);
     void delete(Long id);

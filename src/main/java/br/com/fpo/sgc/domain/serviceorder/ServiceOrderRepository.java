@@ -11,4 +11,5 @@ public interface ServiceOrderRepository extends JpaRepository<ServiceOrder, Long
     Page<ServiceOrder> findByStatusAndActiveTrue(ServiceOrderStatus status, Pageable pageable);
     Page<ServiceOrder> findByRequesterIdAndActiveTrue(Long requesterId, Pageable pageable);
     Page<ServiceOrder> findByTechnicianIdAndActiveTrue(Long technicianId, Pageable pageable);
+    Page<ServiceOrder> findByAssetIdAndActiveTrue(Long assetId, Pageable pageable);
 }
