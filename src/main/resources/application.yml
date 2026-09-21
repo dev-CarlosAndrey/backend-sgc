@@ -46,12 +46,23 @@ notification:
   max-attempts: ${NOTIFICATION_MAX_ATTEMPTS:3}
   retry-backoff-ms: ${NOTIFICATION_RETRY_BACKOFF_MS:1000}
 
-# Configuração customizada para integração da Evolution API (WhatsApp)
-evolution:
-  api:
-    base-url: ${EVOLUTION_API_URL:http://localhost:8080}
-    api-key: ${EVOLUTION_API_KEY:sua_chave_secreta_aqui}
-    instance-name: ${EVOLUTION_INSTANCE_NAME:sgc-instance}
+# Configuração da integração com o WhatsApp Cloud API (Meta) — substitui a Evolution API
+# (decisão registrada em PLANO_IMPLEMENTACAO_MVP.md, seção 0.2; em teste, ainda não consumida por nenhum bean)
+whatsapp:
+  cloud-api:
+    base-url: ${WHATSAPP_CLOUD_API_BASE_URL:https://graph.facebook.com/v22.0}
+    access-token: ${WHATSAPP_ACCESS_TOKEN:defina_no_ambiente}
+    phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:defina_no_ambiente}
+    business-account-id: ${WHATSAPP_BUSINESS_ACCOUNT_ID:defina_no_ambiente}
+    webhook-verify-token: ${WHATSAPP_WEBHOOK_VERIFY_TOKEN:defina_no_ambiente}
+    app-secret: ${WHATSAPP_APP_SECRET:defina_no_ambiente}
+
+# Configuração do SendGrid (fallback de notificação por e-mail quando o WhatsApp falhar)
+sendgrid:
+  api-key: ${SENDGRID_API_KEY:}
+  from-email: ${SENDGRID_FROM_EMAIL:carlos.andrey@alu.fpo.edu.br}
+  base-url: ${SENDGRID_BASE_URL:https://api.sendgrid.com}
+  from-name: ${SENDGRID_FROM_NAME:SGC - Controle Patrimonial}
 
 # Configuração de Segurança (JWT)
 api:
