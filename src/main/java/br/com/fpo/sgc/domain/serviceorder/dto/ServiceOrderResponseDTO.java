@@ -7,6 +7,7 @@ import br.com.fpo.sgc.domain.serviceorder.ServiceOrderPriority;
 import br.com.fpo.sgc.domain.serviceorder.ServiceOrderStatus;
 import br.com.fpo.sgc.domain.user.dto.UserResponseDTO;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 public record ServiceOrderResponseDTO(
@@ -22,6 +23,7 @@ public record ServiceOrderResponseDTO(
         SectorResponseDTO sector,
         String solutionDetails,
         Instant closedAt,
+        BigDecimal cost,
         Boolean active,
         Instant createdAt
 ) {

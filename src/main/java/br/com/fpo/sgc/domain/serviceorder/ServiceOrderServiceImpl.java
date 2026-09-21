@@ -19,6 +19,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Service
@@ -134,7 +135,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
 
     @Override
     @Transactional
-    public ServiceOrderResponseDTO resolveOrder(Long id, String solutionDetails) {
+    public ServiceOrderResponseDTO resolveOrder(Long id, String solutionDetails, BigDecimal cost) {
         ServiceOrder so = serviceOrderRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Ordem de serviço não encontrada com ID: " + id));
 
@@ -145,6 +146,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
         so.setSolutionDetails(solutionDetails);
         so.setStatus(ServiceOrderStatus.RESOLVED);
         so.setClosedAt(Instant.now());
+        so.setCost(cost);
 
         if (so.getAsset() != null) {
             so.getAsset().setStatus(AssetStatus.IN_USE);

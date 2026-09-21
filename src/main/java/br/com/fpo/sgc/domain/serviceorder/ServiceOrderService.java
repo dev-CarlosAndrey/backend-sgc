@@ -5,6 +5,8 @@ import br.com.fpo.sgc.domain.serviceorder.dto.ServiceOrderResponseDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.math.BigDecimal;
+
 public interface ServiceOrderService {
     ServiceOrderResponseDTO create(ServiceOrderRequestDTO dto);
     ServiceOrderResponseDTO findById(Long id);
@@ -14,6 +16,6 @@ public interface ServiceOrderService {
     Page<ServiceOrderResponseDTO> findByRequesterId(Long requesterId, Pageable pageable);
     Page<ServiceOrderResponseDTO> findByTechnicianId(Long technicianId, Pageable pageable);
     ServiceOrderResponseDTO assignTechnician(Long id, Long technicianId);
-    ServiceOrderResponseDTO resolveOrder(Long id, String solutionDetails);
+    ServiceOrderResponseDTO resolveOrder(Long id, String solutionDetails, BigDecimal cost);
     void delete(Long id);
 }

@@ -12,6 +12,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+
 @RestController
 @RequestMapping("/api/v1/service-orders")
 @RequiredArgsConstructor
@@ -75,8 +77,9 @@ public class ServiceOrderController {
     @PatchMapping("/{id}/resolve")
     public ResponseEntity<ServiceOrderResponseDTO> resolveOrder(
             @PathVariable Long id,
-            @RequestBody String solutionDetails) {
-        return ResponseEntity.ok(serviceOrderService.resolveOrder(id, solutionDetails));
+            @RequestBody String solutionDetails,
+            @RequestParam(required = false) BigDecimal cost) {
+        return ResponseEntity.ok(serviceOrderService.resolveOrder(id, solutionDetails, cost));
     }
 
     @PreAuthorize("hasRole('ADMIN')")

@@ -4,10 +4,12 @@ import br.com.fpo.sgc.domain.asset.AssetRepository;
 import br.com.fpo.sgc.domain.asset.AssetStatus;
 import br.com.fpo.sgc.domain.dashboard.dto.DashboardResponseDTO;
 import br.com.fpo.sgc.domain.dashboard.mapper.DashboardMapper;
+import br.com.fpo.sgc.domain.serviceorder.ServiceOrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +19,7 @@ import java.util.Map;
 public class DashboardServiceImpl implements DashboardService {
 
     private final AssetRepository assetRepository;
+    private final ServiceOrderRepository serviceOrderRepository;
     private final DashboardMapper dashboardMapper;
 
     @Override
@@ -40,14 +43,14 @@ public class DashboardServiceImpl implements DashboardService {
             statusCount.put(status.name(), count);
         }
 
-        long activeTickets = 12;
-        double maintenanceCost = 8450.00;
-        long depreciatingAssets = 36;
+        long activeTickets = serviceOrderRepository.countActiveByCompanyId(companyId);
+        BigDecimal maintenanceCost = serviceOrderRepository.sumMaintenanceCostByCompanyId(companyId);
+        long depreciatingAssets = assetRepository.countDepreciatingByCompanyId(companyId);
 
         return dashboardMapper.toDTO(
                 totalAssets,
                 activeTickets,
-                maintenanceCost,
+                maintenanceCost.doubleValue(),
                 depreciatingAssets,
                 statusCount,
                 assetsByCompany

@@ -7,6 +7,7 @@ import br.com.fpo.sgc.domain.user.User;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
@@ -61,4 +62,7 @@ public class ServiceOrder extends BaseEntity {
 
     @Column(name = "closed_at")
     private Instant closedAt;
+
+    @Column(name = "cost", precision = 12, scale = 2)
+    private BigDecimal cost;
 }

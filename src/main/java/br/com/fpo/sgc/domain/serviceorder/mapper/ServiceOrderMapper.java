@@ -49,6 +49,7 @@ public class ServiceOrderMapper {
                 sectorMapper.toDTO(so.getSector(), 0, 0),
                 so.getSolutionDetails(),
                 so.getClosedAt(),
+                so.getCost(),
                 so.getActive(),
                 so.getCreatedAt()
         );
