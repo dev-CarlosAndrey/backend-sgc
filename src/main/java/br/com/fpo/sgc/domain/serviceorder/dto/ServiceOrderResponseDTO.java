@@ -2,6 +2,7 @@ package br.com.fpo.sgc.domain.serviceorder.dto;
 
 import br.com.fpo.sgc.domain.asset.dto.AssetResponseDTO;
 import br.com.fpo.sgc.domain.location.sector.dto.SectorResponseDTO;
+import br.com.fpo.sgc.domain.serviceorder.ServiceOrderChannel;
 import br.com.fpo.sgc.domain.serviceorder.ServiceOrderPriority;
 import br.com.fpo.sgc.domain.serviceorder.ServiceOrderStatus;
 import br.com.fpo.sgc.domain.user.dto.UserResponseDTO;
@@ -14,6 +15,7 @@ public record ServiceOrderResponseDTO(
         String description,
         ServiceOrderStatus status,
         ServiceOrderPriority priority,
+        ServiceOrderChannel channel,
         UserResponseDTO requester,
         UserResponseDTO technician,
         AssetResponseDTO asset,

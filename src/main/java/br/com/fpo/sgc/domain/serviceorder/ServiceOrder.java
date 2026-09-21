@@ -36,6 +36,10 @@ public class ServiceOrder extends BaseEntity {
     @Column(nullable = false, length = 30)
     private ServiceOrderPriority priority;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private ServiceOrderChannel channel;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "requester_id", nullable = false)
     private User requester;

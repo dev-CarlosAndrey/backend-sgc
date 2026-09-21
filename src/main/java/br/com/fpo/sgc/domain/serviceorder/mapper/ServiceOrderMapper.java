@@ -42,6 +42,7 @@ public class ServiceOrderMapper {
                 so.getDescription(),
                 so.getStatus(),
                 so.getPriority(),
+                so.getChannel(),
                 userMapper.toDTO(so.getRequester()),
                 so.getTechnician() != null ? userMapper.toDTO(so.getTechnician()) : null,
                 so.getAsset() != null ? assetMapper.toDTO(so.getAsset()) : null,

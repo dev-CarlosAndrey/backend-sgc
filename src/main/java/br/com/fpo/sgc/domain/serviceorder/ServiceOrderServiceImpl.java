@@ -52,6 +52,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
 
         ServiceOrder so = serviceOrderMapper.toEntity(dto, requester, sector, asset);
         so.setStatus(ServiceOrderStatus.OPEN);
+        so.setChannel(ServiceOrderChannel.PANEL);
 
         ServiceOrder savedSo = serviceOrderRepository.save(so);
 
