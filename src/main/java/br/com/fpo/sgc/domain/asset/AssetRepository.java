@@ -7,8 +7,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+
 
 @Repository
 public interface AssetRepository extends JpaRepository<Asset, Long> {
@@ -49,4 +51,16 @@ public interface AssetRepository extends JpaRepository<Asset, Long> {
             "AND (:companyId IS NULL OR a.sector.building.company.id = :companyId) " +
             "GROUP BY a.status")
     List<Object[]> countByStatusAndCompanyId(@Param("companyId") Long companyId);
+
+    // Bens ativos com setor e categoria carregados, para o relatório de patrimônio.
+    @Query("SELECT a FROM Asset a JOIN FETCH a.sector LEFT JOIN FETCH a.category " +
+            "WHERE a.active = true " +
+            "AND (:companyId IS NULL OR a.sector.building.company.id = :companyId)")
+    List<Asset> findForPatrimony(@Param("companyId") Long companyId);
+
+    @Query("SELECT a FROM Asset a JOIN FETCH a.sector LEFT JOIN FETCH a.category " +
+            "WHERE a.active = true AND a.conservationState IN :states " +
+            "AND (:companyId IS NULL OR a.sector.building.company.id = :companyId)")
+    List<Asset> findByConservationStates(@Param("states") Collection<AssetConservationState> states,
+                                         @Param("companyId") Long companyId);
 }

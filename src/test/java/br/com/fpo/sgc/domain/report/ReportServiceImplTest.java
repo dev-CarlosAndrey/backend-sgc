@@ -3,6 +3,9 @@ package br.com.fpo.sgc.domain.report;
 import br.com.fpo.sgc.domain.asset.Asset;
 import br.com.fpo.sgc.domain.asset.AssetRepository;
 import br.com.fpo.sgc.domain.asset.AssetStatus;
+import br.com.fpo.sgc.domain.asset.category.AssetCategory;
+import br.com.fpo.sgc.common.exception.BusinessException;
+import br.com.fpo.sgc.domain.report.dto.MaintenanceCostReportDTO;
 import br.com.fpo.sgc.domain.location.sector.Sector;
 import br.com.fpo.sgc.domain.report.dto.AssetReportDTO;
 import br.com.fpo.sgc.domain.report.dto.ServiceOrderReportDTO;
@@ -174,5 +177,72 @@ class ReportServiceImplTest {
         assertTrue(csv.contains("Código;Título;Status;Prioridade;Canal;Solicitante;Técnico;Bem (tombamento);Setor;Abertura;Conclusão;Custo"));
         assertTrue(csv.contains("1;OS 1;Concluída;Alta;PANEL;Prof;Ana;T-001;Setor A;01/09/2026 10:00;01/09/2026 12:30;100,50"));
         assertTrue(csv.contains("2;OS 2;Aberta;Baixa;PANEL;Prof;;;Setor A;02/09/2026 10:00;;"));
+    }
+
+    // ---------- custo de manutenção × valor do bem ----------
+
+    private static MaintenanceCostFilter costFilter(double threshold) {
+        return new MaintenanceCostFilter(null, null, ServiceOrderPeriodField.CLOSED, null, threshold);
+    }
+
+    @Test
+    void custoPorBem_calculaPercentualSinalizaAcimaDoLimiteEOrdena() {
+        AssetCategory info = AssetCategory.builder().name("Informática").build();
+        Asset notebook = Asset.builder().id(1L).tagNumber("T-001").name("Notebook").category(info)
+                .acquisitionValue(new BigDecimal("2000.00")).build();
+        Asset mesa = Asset.builder().id(2L).tagNumber("T-002").name("Mesa")
+                .acquisitionValue(new BigDecimal("1000.00")).build();
+        Asset semValor = Asset.builder().id(3L).tagNumber("T-003").name("Doado").build();
+        when(serviceOrderRepository.findForReport(any(), any(), any(), any(), any(), eq(ServiceOrderStatus.RESOLVED), any()))
+                .thenReturn(List.of(
+                        order(1, ServiceOrderStatus.RESOLVED, ServiceOrderPriority.HIGH, null, notebook, "2026-09-01T10:00:00Z", "2026-09-01T12:00:00Z", "700.00"),
+                        order(2, ServiceOrderStatus.RESOLVED, ServiceOrderPriority.HIGH, null, notebook, "2026-09-02T10:00:00Z", "2026-09-02T12:00:00Z", "500.00"),
+                        order(3, ServiceOrderStatus.RESOLVED, ServiceOrderPriority.LOW, null, mesa, "2026-09-03T10:00:00Z", "2026-09-03T12:00:00Z", "100.00"),
+                        order(4, ServiceOrderStatus.RESOLVED, ServiceOrderPriority.LOW, null, semValor, "2026-09-04T10:00:00Z", "2026-09-04T12:00:00Z", "80.00"),
+                        // sem custo e sem bem: ignoradas
+                        order(5, ServiceOrderStatus.RESOLVED, ServiceOrderPriority.LOW, null, mesa, "2026-09-05T10:00:00Z", "2026-09-05T12:00:00Z", null),
+                        order(6, ServiceOrderStatus.RESOLVED, ServiceOrderPriority.LOW, null, null, "2026-09-06T10:00:00Z", "2026-09-06T12:00:00Z", "10.00")));
+
+        MaintenanceCostReportDTO report = service.maintenanceCostReport(costFilter(50));
+
+        assertEquals(3, report.assets().size());
+        var first = report.assets().get(0);
+        assertEquals("T-001", first.tagNumber());
+        assertEquals(2, first.orders());
+        assertEquals(new BigDecimal("1200.00"), first.maintenanceCost());
+        assertEquals(60.0, first.costPercentOfValue());
+        assertTrue(first.exceedsThreshold());
+        assertEquals("Informática", first.categoryName());
+        var second = report.assets().get(1);
+        assertEquals("T-002", second.tagNumber());
+        assertEquals(10.0, second.costPercentOfValue());
+        assertFalse(second.exceedsThreshold());
+        assertEquals("Sem categoria", second.categoryName());
+        // sem valor de aquisição: percentual nulo, nunca sinalizado, vai para o fim
+        var last = report.assets().get(2);
+        assertNull(last.costPercentOfValue());
+        assertFalse(last.exceedsThreshold());
+
+        assertEquals(new BigDecimal("1380.00"), report.totalMaintenanceCost());
+        assertEquals(new BigDecimal("3000.00"), report.totalAcquisitionValue());
+        assertEquals(1, report.assetsAboveThreshold());
+    }
+
+    @Test
+    void custoPorBem_limiteNegativo_lancaBusinessException() {
+        assertThrows(BusinessException.class, () -> service.maintenanceCostReport(costFilter(-1)));
+    }
+
+    @Test
+    void csvDeCustoPorBem_temCabecalhoEValoresNoFormatoPtBr() {
+        Asset notebook = Asset.builder().id(1L).tagNumber("T-001").name("Notebook")
+                .acquisitionValue(new BigDecimal("2000")).build();
+        when(serviceOrderRepository.findForReport(any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of(
+                order(1, ServiceOrderStatus.RESOLVED, ServiceOrderPriority.HIGH, null, notebook, "2026-09-01T10:00:00Z", "2026-09-01T12:00:00Z", "1200.5")));
+
+        String csv = new String(service.maintenanceCostCsv(costFilter(50)), StandardCharsets.UTF_8);
+
+        assertTrue(csv.contains("Tombamento;Bem;Categoria;Valor de aquisição;Nº de OS;Custo de manutenção;Custo / valor (%);Candidato a substituição"));
+        assertTrue(csv.contains("T-001;Notebook;Sem categoria;2000,00;1;1200,50;60,0;Sim"));
     }
 }

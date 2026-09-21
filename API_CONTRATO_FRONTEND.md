@@ -681,6 +681,15 @@ Sem `companyId`, os indicadores são globais (todas as empresas); com `companyId
 | GET | `/assets/export?companyId=` | Mesmo relatório em **CSV** |
 | GET | `/service-orders` | Indicadores de OS por período/técnico/status (RF20) |
 | GET | `/service-orders/export` | Lista de OS do filtro em **CSV** |
+| GET | `/maintenance-cost` | Custo de manutenção × valor de aquisição por bem |
+| GET | `/maintenance-cost/export` | Mesmo relatório em **CSV** |
+| GET | `/service-orders/monthly` | Evolução mensal: OS abertas × concluídas e custo por mês |
+| GET | `/service-orders/stage-times` | Tempo médio em cada etapa do fluxo da OS e gargalo |
+| GET | `/assets/patrimony` | Patrimônio com depreciação linear por categoria ou setor |
+| GET | `/assets/critical` | Bens críticos (estado ruim e/ou manutenção recorrente) |
+| GET | `/movements` | Resumo das movimentações de bens no período |
+| GET | `/audit` | Resumo do log de auditoria (por entidade, ação e usuário) |
+| GET | `<qualquer um acima>/export` | Mesmo relatório em **CSV** (`os-por-mes.csv`, `tempo-por-etapa.csv`, `patrimonio.csv`, `bens-criticos.csv`, `movimentacoes.csv`, `auditoria.csv`) |
 
 Filtros de `/service-orders` e `/service-orders/export` (todos opcionais; sem nenhum, cobre todas as OS ativas): `from`, `to` (datas `yyyy-MM-dd` inclusivas), `field` (`OPENED` padrão | `CLOSED`, indica a qual data o período se aplica), `technicianId`, `status`, `companyId`. `from` > `to` → 400.
 
@@ -715,6 +724,77 @@ Filtros de `/service-orders` e `/service-orders/export` (todos opcionais; sem ne
 - `avgResolutionHours` = média entre abertura e conclusão das OS **`RESOLVED`** do filtro (canceladas não contam); `null` se não houver nenhuma. Arredondado a 1 casa.
 - `totalCost` = soma do `cost` das OS do filtro.
 - `topAssets` = até 5 bens com mais OS no filtro (mais manutenções).
+
+**`GET /reports/maintenance-cost`** — filtros opcionais: `from`, `to` (`yyyy-MM-dd` inclusivas), `field` (`CLOSED` padrão | `OPENED`), `companyId`, `threshold` (% padrão `50`; negativo → 400)
+```json
+{
+  "thresholdPercent": 50.0,
+  "totalMaintenanceCost": 1380.00,
+  "totalAcquisitionValue": 3000.00,
+  "assetsAboveThreshold": 1,
+  "assets": [
+    { "assetId": 1, "tagNumber": "T-001", "name": "Notebook", "categoryName": "Informática",
+      "acquisitionValue": 2000.00, "orders": 2, "maintenanceCost": 1200.00,
+      "costPercentOfValue": 60.0, "exceedsThreshold": true },
+    { "assetId": 3, "tagNumber": "T-003", "name": "Doado", "categoryName": "Sem categoria",
+      "acquisitionValue": null, "orders": 1, "maintenanceCost": 80.00,
+      "costPercentOfValue": null, "exceedsThreshold": false }
+  ]
+}
+```
+- Considera só OS **`RESOLVED`** com `cost` preenchido e com bem vinculado. Bens sem nenhuma OS assim não aparecem.
+- `costPercentOfValue` = custo acumulado / `acquisitionValue` × 100 (1 casa). `null` se o bem não tem valor de aquisição (ou é zero); nesse caso `exceedsThreshold` é sempre `false`.
+- `exceedsThreshold` = `costPercentOfValue >= threshold`: bem candidato a substituição/baixa.
+- Ordenado por `costPercentOfValue` decrescente (nulos por último). `totalAcquisitionValue` soma só os bens listados. CSV: `custo-manutencao-por-bem.csv`.
+
+#### Relatórios de análise
+
+Todos `ADMIN`, todos com `/export` (CSV, mesmo formato descrito abaixo). Datas `yyyy-MM-dd` inclusivas; `from` > `to` → 400.
+
+**`GET /reports/service-orders/monthly`** — `from`, `to`, `companyId`. Padrão: últimos 12 meses; máximo 60 (senão 400). O período é ajustado a meses inteiros.
+```json
+{ "totalOpened": 9, "totalResolved": 6,
+  "months": [ { "month": "2026-08", "opened": 0, "resolved": 1, "cost": 40.00 },
+              { "month": "2026-09", "opened": 9, "resolved": 5, "cost": 320.50 } ] }
+```
+`opened` conta por data de abertura; `resolved` e `cost` contam por data de **conclusão** (OS `RESOLVED`). Meses sem movimento vêm zerados; ordem cronológica.
+
+**`GET /reports/service-orders/stage-times`** — `from`, `to` (aplicados à abertura da OS), `companyId`. Calculado sobre o histórico de status.
+```json
+{ "orders": 12, "bottleneck": "OPEN",
+  "stages": [ { "status": "OPEN", "samples": 10, "avgHours": 6.5, "maxHours": 30.0 },
+              { "status": "IN_PROGRESS", "samples": 8, "avgHours": 2.1, "maxHours": 5.0 } ],
+  "byPriority": [ { "priority": "HIGH", "orders": 4, "avgFirstResponseHours": 1.5, "avgResolutionHours": 4.0 } ] }
+```
+- `stages` só traz as etapas com permanência (`OPEN`, `IN_PROGRESS`); só passagens já encerradas contam. `bottleneck` = maior média (`null` sem amostras).
+- `avgFirstResponseHours` = tempo em `OPEN` até a primeira mudança de status; `avgResolutionHours` = da abertura à conclusão (só `RESOLVED`). `byPriority` traz todas as prioridades (zeradas/`null` inclusive).
+
+**`GET /reports/assets/patrimony`** — `companyId`, `groupBy` (`CATEGORY` padrão | `SECTOR`), `usefulLifeYears` (padrão `10`, 1–50), `asOf` (padrão hoje).
+```json
+{ "asOf": "2026-09-21", "usefulLifeYears": 10, "assets": 4, "assetsWithoutValuation": 1,
+  "acquisitionValue": 2000.00, "accumulatedDepreciation": 1100.00, "bookValue": 900.00,
+  "groups": [ { "groupId": 1, "groupName": "Informática", "assets": 3, "assetsWithoutValuation": 0,
+                "acquisitionValue": 2000.00, "accumulatedDepreciation": 1100.00, "bookValue": 900.00 } ] }
+```
+Depreciação **linear, sem valor residual, por meses completos**, com a mesma vida útil para todos os bens (o sistema não modela vida útil por categoria); bem totalmente depreciado vale 0. Bens baixados (`DISCARDED`) ficam de fora; bens sem `acquisitionDate` ou `acquisitionValue` contam em `assetsWithoutValuation` e não entram nos valores. Grupos por valor contábil decrescente; `groupId: null` = "Sem categoria".
+
+**`GET /reports/assets/critical`** — `companyId`, `from`/`to` (aplicados à abertura das OS), `minOrders` (padrão `2`, ≥ 1).
+```json
+{ "minOrders": 2, "total": 1,
+  "assets": [ { "assetId": 3, "tagNumber": "T-3", "name": "Impressora", "sectorName": "Sala 1", "categoryName": "Informática",
+                "conservationState": "BAD", "orders": 3, "maintenanceCost": 120.00,
+                "reasons": ["BAD_CONSERVATION", "RECURRENT_MAINTENANCE"] } ] }
+```
+`reasons`: `BAD_CONSERVATION` (estado `BAD`/`UNSERVICEABLE`) e/ou `RECURRENT_MAINTENANCE` (≥ `minOrders` OS não canceladas). Ordenado: mais motivos, mais OS, maior custo. Bens baixados/inativos ficam de fora.
+
+**`GET /reports/movements`** — `from`, `to`, `assetId`, `companyId` (setor de destino). Só resumo; a lista completa (data, bem, origem, destino, motivo) está no CSV.
+```json
+{ "total": 3, "distinctAssets": 2,
+  "topAssets": [ { "assetId": 1, "tagNumber": "T-1", "name": "Notebook", "total": 2 } ],
+  "byOriginSector": [ { "key": "Sala 1", "total": 2 } ], "byDestinationSector": [ { "key": "Sala 3", "total": 2 } ] }
+```
+
+**`GET /reports/audit`** — `from`, `to`, `entityName`, `performedBy` (igualdade exata). Resumo com `total`, `byEntity`, `byAction`, `byUser` (`{key,total}`, maior primeiro; usuário nulo aparece como "Sem usuário"). O CSV traz os **10.000 eventos mais recentes** do filtro.
 
 **CSV** (`/export`): resposta `text/csv; charset=UTF-8` com `Content-Disposition: attachment` (`bens-por-categoria.csv` / `ordens-de-servico.csv`). Formato pensado para o Excel pt-BR: separador `;`, UTF-8 com BOM, cabeçalhos e rótulos de status em português, datas `dd/MM/yyyy HH:mm` (fuso local), custo com vírgula (`25,50`). Textos que começam com `=`, `+`, `-` ou `@` recebem um apóstrofo na frente (proteção contra injeção de fórmulas). Para baixar no frontend, use `fetch` com o header `Authorization` e trate a resposta como `blob` (um `<a href>` simples não envia o token).
 

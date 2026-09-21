@@ -1,5 +1,6 @@
 package br.com.fpo.sgc.domain.report;
 
+import br.com.fpo.sgc.common.exception.BusinessException;
 import br.com.fpo.sgc.common.util.CsvWriter;
 import br.com.fpo.sgc.common.util.PeriodRange;
 import br.com.fpo.sgc.domain.asset.Asset;
@@ -171,7 +172,70 @@ public class ReportServiceImpl implements ReportService {
         return CsvWriter.toBytes(header, rows);
     }
 
+    // ---------- Custo de manutenção × valor do bem ----------
+
+    @Override
+    @Transactional(readOnly = true)
+    public MaintenanceCostReportDTO maintenanceCostReport(MaintenanceCostFilter filter) {
+        if (filter.thresholdPercent() < 0) {
+            throw new BusinessException("O limite (threshold) não pode ser negativo.");
+        }
+        PeriodRange range = PeriodRange.of(filter.from(), filter.to());
+        boolean byClosing = filter.field() != ServiceOrderPeriodField.OPENED;
+        // Só OS RESOLVED: é quando o custo é lançado (cancelada não gera custo).
+        List<ServiceOrder> orders = serviceOrderRepository.findForReport(
+                byClosing ? null : range.from(), byClosing ? null : range.to(),
+                byClosing ? range.from() : null, byClosing ? range.to() : null,
+                null, ServiceOrderStatus.RESOLVED, filter.companyId());
+
+        Map<Long, CostAccumulator> byAsset = new HashMap<>();
+        for (ServiceOrder so : orders) {
+            if (so.getAsset() == null || so.getCost() == null) {
+                continue;
+            }
+            byAsset.computeIfAbsent(so.getAsset().getId(), id -> new CostAccumulator(so.getAsset())).add(so.getCost());
+        }
+
+        List<AssetCostRowDTO> rows = byAsset.values().stream()
+                .map(acc -> acc.toRow(filter.thresholdPercent()))
+                .sorted(Comparator.comparing(AssetCostRowDTO::costPercentOfValue, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(AssetCostRowDTO::maintenanceCost, Comparator.reverseOrder())
+                        .thenComparing(AssetCostRowDTO::tagNumber))
+                .toList();
+
+        BigDecimal totalCost = rows.stream().map(AssetCostRowDTO::maintenanceCost).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalValue = rows.stream().map(AssetCostRowDTO::acquisitionValue).filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        long above = rows.stream().filter(AssetCostRowDTO::exceedsThreshold).count();
+
+        return new MaintenanceCostReportDTO(filter.thresholdPercent(), totalCost, totalValue, above, rows);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] maintenanceCostCsv(MaintenanceCostFilter filter) {
+        List<String> header = List.of("Tombamento", "Bem", "Categoria", "Valor de aquisição", "Nº de OS",
+                "Custo de manutenção", "Custo / valor (%)", "Candidato a substituição");
+
+        List<List<String>> rows = maintenanceCostReport(filter).assets().stream().map(a -> List.of(
+                a.tagNumber(),
+                a.name(),
+                a.categoryName(),
+                a.acquisitionValue() != null ? money(a.acquisitionValue()) : "",
+                String.valueOf(a.orders()),
+                money(a.maintenanceCost()),
+                a.costPercentOfValue() != null ? String.valueOf(a.costPercentOfValue()).replace('.', ',') : "",
+                a.exceedsThreshold() ? "Sim" : "Não"
+        )).toList();
+
+        return CsvWriter.toBytes(header, rows);
+    }
+
     // ---------- apoio ----------
+
+    private static String money(BigDecimal value) {
+        return value.setScale(2, RoundingMode.HALF_UP).toPlainString().replace('.', ',');
+    }
 
     // Datas inclusivas; field decide se o período vale para a abertura ou para a conclusão da ordem.
     private List<ServiceOrder> fetch(ServiceOrderReportFilter filter) {
@@ -249,6 +313,32 @@ public class ReportServiceImpl implements ReportService {
                 map.put(status.name(), byStatus.getOrDefault(status, 0L));
             }
             return map;
+        }
+    }
+
+    private static final class CostAccumulator {
+        private final Asset asset;
+        private long orders;
+        private BigDecimal cost = BigDecimal.ZERO;
+
+        private CostAccumulator(Asset asset) {
+            this.asset = asset;
+        }
+
+        private void add(BigDecimal value) {
+            orders++;
+            cost = cost.add(value);
+        }
+
+        private AssetCostRowDTO toRow(double thresholdPercent) {
+            BigDecimal value = asset.getAcquisitionValue();
+            Double percent = null;
+            if (value != null && value.signum() > 0) {
+                percent = cost.multiply(BigDecimal.valueOf(100)).divide(value, 1, RoundingMode.HALF_UP).doubleValue();
+            }
+            return new AssetCostRowDTO(asset.getId(), asset.getTagNumber(), asset.getName(),
+                    asset.getCategory() != null ? asset.getCategory().getName() : NO_CATEGORY,
+                    value, orders, cost, percent, percent != null && percent >= thresholdPercent);
         }
     }
 
