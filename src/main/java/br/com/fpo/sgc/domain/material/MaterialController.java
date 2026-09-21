@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,6 +19,7 @@ public class MaterialController {
 
     private final MaterialService materialService;
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ResponseEntity<MaterialResponseDTO> create(@RequestBody @Valid MaterialRequestDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(materialService.create(dto));
@@ -33,11 +35,13 @@ public class MaterialController {
         return ResponseEntity.ok(materialService.findById(id));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public ResponseEntity<MaterialResponseDTO> update(@PathVariable Long id, @RequestBody @Valid MaterialRequestDTO dto) {
         return ResponseEntity.ok(materialService.update(id, dto));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         materialService.delete(id);

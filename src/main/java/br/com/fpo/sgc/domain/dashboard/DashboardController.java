@@ -3,6 +3,7 @@ package br.com.fpo.sgc.domain.dashboard;
 import br.com.fpo.sgc.domain.dashboard.dto.DashboardResponseDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -12,6 +13,7 @@ public class DashboardController {
 
     private final DashboardService dashboardService;
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
     public ResponseEntity<DashboardResponseDTO> getDashboardData(
             @RequestParam(required = false) Long companyId

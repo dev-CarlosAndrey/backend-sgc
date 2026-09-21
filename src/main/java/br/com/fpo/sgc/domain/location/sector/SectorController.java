@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,6 +19,7 @@ public class SectorController {
 
     private final SectorService sectorService;
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ResponseEntity<SectorResponseDTO> create(@RequestBody @Valid SectorRequestDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(sectorService.create(dto));
@@ -40,11 +42,13 @@ public class SectorController {
         return ResponseEntity.ok(sectorService.findByBuildingId(buildingId, pageable));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public ResponseEntity<SectorResponseDTO> update(@PathVariable Long id, @RequestBody @Valid SectorRequestDTO dto) {
         return ResponseEntity.ok(sectorService.update(id, dto));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         sectorService.delete(id);
