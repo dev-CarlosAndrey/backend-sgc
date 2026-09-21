@@ -40,6 +40,12 @@ app:
   upload:
     dir: ${UPLOAD_DIR:uploads}
 
+# Notificações (WhatsApp com fallback por e-mail)
+notification:
+  fallback-enabled: ${NOTIFICATION_FALLBACK_ENABLED:true}
+  max-attempts: ${NOTIFICATION_MAX_ATTEMPTS:3}
+  retry-backoff-ms: ${NOTIFICATION_RETRY_BACKOFF_MS:1000}
+
 # Configuração customizada para integração da Evolution API (WhatsApp)
 evolution:
   api:

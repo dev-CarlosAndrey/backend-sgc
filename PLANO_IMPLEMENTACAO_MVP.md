@@ -8,7 +8,7 @@
 
 ## 0. Status atual (atualizado em 2026-09-21 — inclui decisão em avaliação na seção 0.2 e conclusão do RF01/RF03/RF05/RF06/RF08/RF12/RF13/RF18 na mesma data)
 
-Levantamento feito diretamente sobre o código em `src/main/java/br/com/fpo/sgc` e as migrations em `src/main/resources/db/migration` (V1–V18).
+Levantamento feito diretamente sobre o código em `src/main/java/br/com/fpo/sgc` e as migrations em `src/main/resources/db/migration` (V1–V19).
 
 - **Fase 1 (núcleo sem WhatsApp)**: implementada em grande parte, com módulos a mais do que o desenho original previa (ver seção 5.1) e algumas lacunas pontuais em relação ao RF descrito (ver seção 7).
 - **Fases 2 e 3 (WhatsApp/Evolution API e fallback SendGrid)**: **não iniciadas**. Não existe nenhuma classe de integração, cliente HTTP, webhook, máquina de estados de chatbot ou `NotificationService` no código. As variáveis `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE_NAME` já estão declaradas em `application.yml`, mas não são lidas por nenhum bean (confirmado também pelo `CLAUDE.md` do projeto). Não há dependência do SendGrid no `pom.xml`.
@@ -28,7 +28,8 @@ O código foi implementado em inglês (`br.com.fpo.sgc.domain.*`), enquanto o pl
 | `categoria_bem` | Implementado em 2026-09-21 como `domain.asset.category.AssetCategory` (tabela `tb_asset_categories`, FK opcional `tb_assets.category_id`) — entidade dedicada, decidida em vez de reaproveitar `Material`/`Product`/`Brand` (que continuam como catálogo auxiliar independente, não vinculado ao `Asset` — ver nota em 7.2). Ver RF03 na seção 7.2. |
 | `os_status_log` | Implementado em 2026-09-21 como `domain.serviceorder.statuslog.ServiceOrderStatusLog` (tabela `tb_service_order_status_logs`, V18). Ver RF10 na seção 7.3. |
 | `baixa_patrimonial` | Não existe; o soft delete padrão (`active = false`) é o único mecanismo de "baixa" hoje. |
-| `chatbot_sessao`, `notificacao` | Não existem. |
+| `notificacao` | Implementado em 2026-09-21 como `domain.notification.Notification` (tabela `tb_notifications`, V19). Ver seção 9.1. |
+| `chatbot_sessao` | Não existe. |
 
 Módulos implementados que **não estavam no modelo de dados original** do plano e devem ser considerados no desenho final:
 - `domain.employee.Employee` — cadastro de funcionários (nome, CPF, matrícula, cargo, empresa, setor), separado de `User`. Hoje não há vínculo entre `Employee` e a carga patrimonial de um `Asset`.
@@ -126,6 +127,7 @@ Diagrama entidade-relacionamento deve ser produzido (Mermaid ou DrawSQL, como ci
 | V16 | `User` (seed) | Insere o usuário administrador de bootstrap (`admin` / `Admin@123`, `role=ADMIN`), necessário porque os endpoints de escrita de `UserController` passaram a exigir `ADMIN` (RF01). Trocar a senha antes de uso real. |
 | V17 | `ServiceOrder` (alter) | Adiciona `cost` (opcional, preenchido ao resolver a OS), usado para calcular `maintenanceCost` real no dashboard (RF18). |
 | V18 | `ServiceOrderStatusLog` (nova) | Cria `tb_service_order_status_logs` (OS, status anterior/novo, `changed_by`, `note`), alimentada por todas as mudanças de status da OS (RF10). |
+| V19 | `Notification` (nova) | Cria `tb_notifications` (OS, destinatário, canal `WHATSAPP`/`EMAIL`, `delivery_status` `SENT`/`FAILED`, nº da tentativa, erro), um registro por tentativa de envio (seção 9.1). |
 
 ## 6. Arquitetura
 
@@ -215,14 +217,14 @@ Mesmo usando a API oficial (Cloud API), o canal WhatsApp pode falhar por motivos
 > **Status: nada desta seção foi iniciado.** Não há `NotificationSender`, `NotificationService`, `WhatsAppNotificationSender`, `EmailNotificationSender`, dependência do SendGrid no `pom.xml`, tabela `notificacao`, nem endpoint de health-check da integração WhatsApp. As variáveis `EVOLUTION_API_URL`/`EVOLUTION_API_KEY`/`EVOLUTION_INSTANCE_NAME` ainda existem em `application.yml` como placeholders da integração antiga (confirmado no `CLAUDE.md` do projeto: "declarada mas ainda não conectada a nenhum bean/cliente no código") — devem ser substituídas pelas variáveis da Cloud API listadas em 9.1 quando a implementação começar. Pré-requisito lógico (integração WhatsApp funcionando, seção 7.4) também não existe ainda, então esta seção continua corretamente bloqueada até lá.
 
 ### 9.1 Desenho da solução
-- [ ] Criar uma abstração `NotificationSender` com implementações `WhatsAppNotificationSender` (WhatsApp Cloud API) e `EmailNotificationSender` (SendGrid).
-- [ ] Um `NotificationService` central decide o canal: tenta WhatsApp primeiro; se a chamada falhar (erro HTTP da Graph API, timeout, token expirado, número restrito ou limite de mensagens excedido), aciona o fallback por e-mail via SendGrid automaticamente.
+- [~] Abstração `NotificationSender` — interface criada em 2026-09-21 (`domain.notification`: `channel()`/`canSend()`/`send()`). **Faltam as implementações** `WhatsAppNotificationSender` (WhatsApp Cloud API, depende da Fase 2) e `EmailNotificationSender` (SendGrid).
+- [x] Um `NotificationService` central (implementado em 2026-09-21, `NotificationServiceImpl`, coberto por testes unitários; ainda sem senders reais nem disparo nos eventos da OS) decide o canal: tenta WhatsApp primeiro; se a chamada falhar (erro HTTP da Graph API, timeout, token expirado, número restrito ou limite de mensagens excedido), aciona o fallback por e-mail via SendGrid automaticamente.
 - [ ] Cada usuário precisa ter e-mail cadastrado (RF02) para que o fallback funcione — se não houver e-mail, registrar falha e notificar apenas por WhatsApp quando disponível. (`User.email` já existe e é obrigatório/único, então este pré-requisito de dado já está atendido.)
-- [ ] Registrar cada tentativa de envio (canal, status, timestamp) na tabela `notificacao`, para fins de auditoria e para a discussão de resultados do TCC (mostrar taxa de sucesso por canal).
+- [x] Registrar cada tentativa de envio (canal, status, timestamp) na tabela `notificacao`, para fins de auditoria e para a discussão de resultados do TCC (mostrar taxa de sucesso por canal).
 - [ ] Endpoint/health-check simples que verifica periodicamente a validade do access token e o `quality_rating`/`messaging_limit_tier` do número junto à Graph API, expondo isso no painel administrativo (ex.: badge "WhatsApp: operacional/degradado").
 - [ ] Templates de e-mail equivalentes às mensagens de WhatsApp (abertura de OS, atribuição, mudança de status, conclusão), incluindo o código da OS.
 - [ ] Variáveis de ambiente sugeridas (substituem as três antigas da Evolution API): `WHATSAPP_CLOUD_API_BASE_URL` (ex.: `https://graph.facebook.com/v22.0`), `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_BUSINESS_ACCOUNT_ID`, `WHATSAPP_WEBHOOK_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, além de `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`, `NOTIFICATION_FALLBACK_ENABLED`. Nenhuma delas está em `application.yml` ainda.
-- [ ] Retentativas com backoff simples antes de considerar o canal principal indisponível (evitar falso positivo por lentidão pontual).
+- [x] Retentativas com backoff simples (`notification.max-attempts`/`retry-backoff-ms`, backoff linear) antes de considerar o canal principal indisponível (evitar falso positivo por lentidão pontual).
 
 ### 9.2 Por que isso é relevante para o TCC
 Reforça, na defesa, que o sistema foi pensado para continuidade operacional mesmo usando um canal gerenciado por terceiro (Meta): falhas pontuais de rate limit, token expirado ou aprovação de template são reais mesmo em API oficial. Ter um fallback documentado responde proativamente a esse ponto — e evita a pergunta mais incômoda que a banca poderia fazer com Evolution API: "o que acontece se o número for banido no meio da apresentação?" (ver seção 0.2).
