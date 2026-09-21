@@ -134,9 +134,9 @@ Política implementada (`@PreAuthorize` a nível de método, habilitado via `@En
 | Usuários, Empresas, Prédios, Setores, Funcionários, Marcas, Materiais, Produtos, Categorias de Bem, Ativos (incl. upload de foto/logo), Movimentações de Ativo | Qualquer autenticado | **ADMIN** |
 | Ordem de Serviço — abrir (`POST`) | — | Qualquer autenticado (`ADMIN`/`TECHNICIAN`/`USER`) |
 | Ordem de Serviço — atribuir técnico, excluir | Qualquer autenticado | **ADMIN** |
-| Ordem de Serviço — resolver | — | **ADMIN** ou **TECHNICIAN** |
-| Ordem de Serviço — consultas (por status/solicitante/técnico/bem/id/lista) | Qualquer autenticado | — |
-| Dashboard | **ADMIN** apenas | — |
+| Ordem de Serviço — resolver, alterar status (`PATCH /{id}/status`) | — | **ADMIN** ou **TECHNICIAN** |
+| Ordem de Serviço — consultas (por status/solicitante/técnico/bem/período/id/lista) e histórico de status | Qualquer autenticado | — |
+| Dashboard e Relatórios (`/reports/**`) | **ADMIN** apenas | — |
 | Log de auditoria | Qualquer autenticado (sem restrição adicional) | — (somente leitura) |
 
 Uma chamada fora do papel permitido retorna **403 Forbidden** sem corpo `ProblemDetail` (resposta padrão do Spring Security). O frontend deve tratar 403 genericamente como "sem permissão" nesses casos, e esconder/desabilitar ações de escrita nos módulos administrativos para usuários `TECHNICIAN`/`USER`.
@@ -486,8 +486,11 @@ O setor de origem é inferido automaticamente a partir do setor atual do bem no 
 | GET | `/status/{status}` | Autenticado | Lista paginada por status |
 | GET | `/requester/{requesterId}` | Autenticado | Lista paginada por solicitante |
 | GET | `/technician/{technicianId}` | Autenticado | Lista paginada por técnico |
+| GET | `/period?from=2026-09-01&to=2026-09-30&field=OPENED` | Autenticado | Lista paginada por período (ver abaixo) |
+| GET | `/{id}/status-history` | Autenticado | Histórico de mudanças de status da OS (paginado) |
 | PATCH | `/{id}/assign-technician/{technicianId}` | ADMIN | Atribui técnico, muda status para `IN_PROGRESS` |
 | PATCH | `/{id}/resolve?cost=150.75` (query param `cost` opcional) | ADMIN ou TECHNICIAN | Resolve a OS, muda status para `RESOLVED` |
+| PATCH | `/{id}/status` | ADMIN ou TECHNICIAN | Altera o status para `IN_PROGRESS` ou `CANCELLED` (ver abaixo) |
 | DELETE | `/{id}` | ADMIN | Soft delete |
 
 **`ServiceOrderRequestDTO`** (usado em `POST /`):
@@ -532,6 +535,34 @@ O corpo é uma **string JSON pura** (não um objeto `{ solutionDetails: ... }`),
   "createdAt": "2026-09-21T12:00:00Z"
 }
 ```
+
+**`GET /period`** — filtro por período (RF12):
+- `from` e `to`: datas `yyyy-MM-dd`, **inclusivas** nas duas pontas (fuso `America/Fortaleza`). Ao menos uma é obrigatória; a outra pode ser omitida.
+- `field`: `OPENED` (padrão, data de abertura) ou `CLOSED` (data de conclusão/cancelamento — OS ainda abertas não aparecem).
+- `from` posterior a `to`, ou nenhuma das duas datas → **400**. Formato de data inválido ou `field` inexistente → **400** (`Parâmetro Inválido`).
+- Vale também para qualquer parâmetro de rota/query com tipo inválido na API (ex.: `/status/XYZ` responde 400).
+
+**`PATCH /{id}/status`** — alteração de status (RF10):
+```json
+{ "status": "IN_PROGRESS | CANCELLED", "note": "string opcional" }
+```
+Regras (violação → **400**): `IN_PROGRESS` exige técnico já atribuído; `CANCELLED` libera o bem vinculado de volta para `IN_USE`; **`RESOLVED` não é aceito aqui** (use `/resolve`, que exige laudo); não é possível reabrir (`OPEN`), repetir o status atual nem alterar uma OS já `RESOLVED`/`CANCELLED`. `status` ausente → 422.
+
+**`GET /{id}/status-history`** — cada item:
+```json
+{
+  "id": 1,
+  "serviceOrderId": 5,
+  "previousStatus": "OPEN | IN_PROGRESS | ... | null",
+  "newStatus": "OPEN | IN_PROGRESS | RESOLVED | CANCELLED",
+  "changedBy": "nome do usuário autenticado (ou SYSTEM)",
+  "note": "string | null",
+  "createdAt": "2026-09-21T12:00:00Z"
+}
+```
+`previousStatus` é `null` no registro de abertura. OS criadas antes de 2026-09-21 não têm histórico retroativo.
+
+**Notificações:** criar, atribuir técnico, alterar status e resolver disparam notificação **por e-mail** ao solicitante e ao técnico (o WhatsApp ainda não existe). É assíncrono e não interfere na resposta da API; não há endpoint para consultar notificações.
 
 ### 6.11 Marcas — `/api/v1/brands`
 
@@ -642,20 +673,67 @@ Sem `companyId`, os indicadores são globais (todas as empresas). Todos os valor
 - `maintenanceCost` = soma do campo `cost` das OS resolvidas (só existe se o `cost` foi informado ao resolver — ver 6.10).
 - `depreciatingAssets` = quantidade de ativos com `acquisitionDate` **e** `acquisitionValue` preenchidos (aproximação — o sistema ainda não modela vida útil/valor residual para depreciação de fato).
 
+### 6.16 Relatórios — `/api/v1/reports` (**ADMIN apenas**)
+
+| Método | Path | Descrição |
+|---|---|---|
+| GET | `/assets?companyId=` | Bens por categoria e situação (RF19) |
+| GET | `/assets/export?companyId=` | Mesmo relatório em **CSV** |
+| GET | `/service-orders` | Indicadores de OS por período/técnico/status (RF20) |
+| GET | `/service-orders/export` | Lista de OS do filtro em **CSV** |
+
+Filtros de `/service-orders` e `/service-orders/export` (todos opcionais; sem nenhum, cobre todas as OS ativas): `from`, `to` (datas `yyyy-MM-dd` inclusivas), `field` (`OPENED` padrão | `CLOSED`, indica a qual data o período se aplica), `technicianId`, `status`, `companyId`. `from` > `to` → 400.
+
+**`GET /reports/assets`**
+```json
+{
+  "total": 4,
+  "byStatus": [ { "key": "AVAILABLE", "total": 2 }, { "key": "IN_USE", "total": 1 }, { "key": "IN_MAINTENANCE", "total": 1 }, { "key": "DISCARDED", "total": 0 } ],
+  "byCategory": [
+    { "categoryId": 1, "categoryName": "Informática", "total": 1,
+      "byStatus": { "AVAILABLE": 0, "IN_USE": 1, "IN_MAINTENANCE": 0, "DISCARDED": 0 } },
+    { "categoryId": null, "categoryName": "Sem categoria", "total": 3, "byStatus": { "AVAILABLE": 2, "IN_USE": 0, "IN_MAINTENANCE": 1, "DISCARDED": 0 } }
+  ]
+}
+```
+`byStatus` e `byCategory[].byStatus` sempre trazem **todas** as situações (zeradas inclusive). Bens sem categoria vêm com `categoryId: null`. Categorias ordenadas da maior para a menor.
+
+**`GET /reports/service-orders`**
+```json
+{
+  "total": 6,
+  "resolved": 3,
+  "totalCost": 61.00,
+  "avgResolutionHours": 2.5,
+  "byStatus":   [ { "key": "OPEN", "total": 3 }, { "key": "IN_PROGRESS", "total": 0 }, { "key": "RESOLVED", "total": 3 }, { "key": "CANCELLED", "total": 0 } ],
+  "byPriority": [ { "key": "LOW", "total": 2 }, { "key": "MEDIUM", "total": 1 }, { "key": "HIGH", "total": 3 }, { "key": "URGENT", "total": 0 } ],
+  "byTechnician": [ { "technicianId": 5, "technicianName": "admin", "total": 3, "resolved": 3, "avgResolutionHours": 2.5 },
+                    { "technicianId": null, "technicianName": "Sem técnico", "total": 3, "resolved": 0, "avgResolutionHours": null } ],
+  "topAssets": [ { "assetId": 4, "tagNumber": "REL-001", "name": "Notebook", "total": 2 } ]
+}
+```
+- `avgResolutionHours` = média entre abertura e conclusão das OS **`RESOLVED`** do filtro (canceladas não contam); `null` se não houver nenhuma. Arredondado a 1 casa.
+- `totalCost` = soma do `cost` das OS do filtro.
+- `topAssets` = até 5 bens com mais OS no filtro (mais manutenções).
+
+**CSV** (`/export`): resposta `text/csv; charset=UTF-8` com `Content-Disposition: attachment` (`bens-por-categoria.csv` / `ordens-de-servico.csv`). Formato pensado para o Excel pt-BR: separador `;`, UTF-8 com BOM, cabeçalhos e rótulos de status em português, datas `dd/MM/yyyy HH:mm` (fuso local), custo com vírgula (`25,50`). Textos que começam com `=`, `+`, `-` ou `@` recebem um apóstrofo na frente (proteção contra injeção de fórmulas). Para baixar no frontend, use `fetch` com o header `Authorization` e trate a resposta como `blob` (um `<a href>` simples não envia o token).
+
+**Não há exportação em PDF.**
+
 ## 7. O que NÃO existe ainda (não tente consumir)
 
 Para o frontend não implementar telas para funcionalidades inexistentes:
 
 - **Sem integração WhatsApp**: não há webhook, não há chatbot, não há endpoint de envio/recebimento de mensagens.
-- **Sem notificações**: nenhum evento do ciclo de vida da OS (abrir/atribuir/resolver) dispara e-mail, WhatsApp ou qualquer notificação. Não existe endpoint `/notifications` nem afins.
-- **Sem relatórios dedicados**: não há exportação CSV/PDF, nem relatório por período/técnico/categoria — apenas o agregado único do `GET /api/v1/dashboard`.
+- **Notificações só por e-mail**: eventos da OS disparam e-mail (SendGrid), mas **não há WhatsApp** e **não existe endpoint `/notifications`** para consultar o que foi enviado.
+- **Sem exportação em PDF**: os relatórios (6.16) só têm JSON e CSV. O dashboard (`GET /api/v1/dashboard`) **não** traz agregação por categoria de bem — use `GET /reports/assets`.
 - **Sem baixa patrimonial estruturada**: retirar um bem do acervo usa o mecanismo genérico de soft delete (`DELETE /api/v1/assets/{id}`), sem campo de motivo/data/responsável pela baixa.
-- **Sem mudança de status livre em OS**: só existem as transições automáticas via `assign-technician` (→ `IN_PROGRESS`) e `resolve` (→ `RESOLVED`). Não há endpoint para, por exemplo, mover uma OS para `CANCELLED`.
+- **Sem reabertura de OS**: não é possível voltar uma OS para `OPEN` nem alterar uma OS `RESOLVED`/`CANCELLED` (ver `PATCH /{id}/status`, 6.10).
 - **Sem `@PreAuthorize` por dono do recurso**: qualquer usuário autenticado pode ler qualquer OS/ativo/etc. de qualquer solicitante — a restrição de papel (seção 4) é por **tipo de operação**, não por "isso é meu".
 
 ## 8. Referências
 
 - Código-fonte: `src/main/java/br/com/fpo/sgc` (organização por domínio: `entity/repository/service+impl/controller/dto/mapper`).
-- Migrations: `src/main/resources/db/migration/V1` a `V17`.
+- Migrations: `src/main/resources/db/migration/V1` a `V19`.
 - Roadmap completo, decisões de arquitetura e status detalhado por requisito funcional: `PLANO_IMPLEMENTACAO_MVP.md` (raiz deste repositório).
 - Swagger UI ao vivo: `GET /swagger-ui.html` no ambiente rodando.

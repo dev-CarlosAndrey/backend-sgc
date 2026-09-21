@@ -1,0 +1,11 @@
+package br.com.fpo.sgc.domain.report;
+
+import br.com.fpo.sgc.domain.report.dto.AssetReportDTO;
+import br.com.fpo.sgc.domain.report.dto.ServiceOrderReportDTO;
+
+public interface ReportService {
+    AssetReportDTO assetsReport(Long companyId);
+    byte[] assetsReportCsv(Long companyId);
+    ServiceOrderReportDTO serviceOrdersReport(ServiceOrderReportFilter filter);
+    byte[] serviceOrdersCsv(ServiceOrderReportFilter filter);
+}

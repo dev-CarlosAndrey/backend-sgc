@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -26,6 +27,22 @@ public interface ServiceOrderRepository extends JpaRepository<ServiceOrder, Long
     @Query("SELECT so FROM ServiceOrder so WHERE so.active = true " +
             "AND (:from IS NULL OR so.closedAt >= :from) AND (:to IS NULL OR so.closedAt < :to)")
     Page<ServiceOrder> findByClosedBetween(@Param("from") Instant from, @Param("to") Instant to, Pageable pageable);
+
+    // Base dos relatórios: filtros opcionais (null = sem filtro) e tudo o que o relatório exibe já carregado.
+    @Query("SELECT so FROM ServiceOrder so JOIN FETCH so.requester JOIN FETCH so.sector " +
+            "LEFT JOIN FETCH so.technician LEFT JOIN FETCH so.asset " +
+            "WHERE so.active = true " +
+            "AND (:openedFrom IS NULL OR so.createdAt >= :openedFrom) AND (:openedTo IS NULL OR so.createdAt < :openedTo) " +
+            "AND (:closedFrom IS NULL OR so.closedAt >= :closedFrom) AND (:closedTo IS NULL OR so.closedAt < :closedTo) " +
+            "AND (:technicianId IS NULL OR so.technician.id = :technicianId) " +
+            "AND (:status IS NULL OR so.status = :status) " +
+            "AND (:companyId IS NULL OR so.sector.building.company.id = :companyId) " +
+            "ORDER BY so.createdAt")
+    List<ServiceOrder> findForReport(@Param("openedFrom") Instant openedFrom, @Param("openedTo") Instant openedTo,
+                                     @Param("closedFrom") Instant closedFrom, @Param("closedTo") Instant closedTo,
+                                     @Param("technicianId") Long technicianId,
+                                     @Param("status") ServiceOrderStatus status,
+                                     @Param("companyId") Long companyId);
 
     // Carrega solicitante e técnico junto, para uso fora de transação (ex.: listener assíncrono de notificações).
     @Query("SELECT so FROM ServiceOrder so JOIN FETCH so.requester LEFT JOIN FETCH so.technician WHERE so.id = :id")

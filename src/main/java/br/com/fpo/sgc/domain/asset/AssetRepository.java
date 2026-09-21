@@ -36,4 +36,11 @@ public interface AssetRepository extends JpaRepository<Asset, Long> {
             "AND a.acquisitionDate IS NOT NULL AND a.acquisitionValue IS NOT NULL " +
             "AND (:companyId IS NULL OR a.sector.building.company.id = :companyId)")
     long countDepreciatingByCompanyId(@Param("companyId") Long companyId);
+
+    // categoryId/categoryName nulos = bens sem categoria.
+    @Query("SELECT c.id, c.name, a.status, COUNT(a) FROM Asset a LEFT JOIN a.category c " +
+            "WHERE a.active = true " +
+            "AND (:companyId IS NULL OR a.sector.building.company.id = :companyId) " +
+            "GROUP BY c.id, c.name, a.status")
+    List<Object[]> countByCategoryAndStatus(@Param("companyId") Long companyId);
 }
