@@ -4,6 +4,7 @@ import br.com.fpo.sgc.domain.asset.dto.AssetRequestDTO;
 import br.com.fpo.sgc.domain.asset.dto.AssetResponseDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
 public interface AssetService {
     AssetResponseDTO create(AssetRequestDTO dto);
@@ -13,4 +14,5 @@ public interface AssetService {
     Page<AssetResponseDTO> findBySectorId(Long sectorId, Pageable pageable);
     AssetResponseDTO update(Long id, AssetRequestDTO dto);
     void delete(Long id);
+    AssetResponseDTO uploadPhoto(Long id, MultipartFile file);
 }

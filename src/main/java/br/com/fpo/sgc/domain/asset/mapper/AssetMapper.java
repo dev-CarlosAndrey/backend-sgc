@@ -5,6 +5,8 @@ import br.com.fpo.sgc.domain.asset.category.AssetCategory;
 import br.com.fpo.sgc.domain.asset.category.mapper.AssetCategoryMapper;
 import br.com.fpo.sgc.domain.asset.dto.AssetRequestDTO;
 import br.com.fpo.sgc.domain.asset.dto.AssetResponseDTO;
+import br.com.fpo.sgc.domain.employee.Employee;
+import br.com.fpo.sgc.domain.employee.mapper.EmployeeMapper;
 import br.com.fpo.sgc.domain.location.sector.Sector;
 import br.com.fpo.sgc.domain.location.sector.mapper.SectorMapper;
 import lombok.RequiredArgsConstructor;
@@ -16,8 +18,9 @@ public class AssetMapper {
 
     private final SectorMapper sectorMapper;
     private final AssetCategoryMapper assetCategoryMapper;
+    private final EmployeeMapper employeeMapper;
 
-    public Asset toEntity(AssetRequestDTO dto, Sector sector, AssetCategory category) {
+    public Asset toEntity(AssetRequestDTO dto, Sector sector, AssetCategory category, Employee responsible) {
         if (dto == null) return null;
 
         return Asset.builder()
@@ -29,6 +32,10 @@ public class AssetMapper {
                 .status(dto.status())
                 .sector(sector)
                 .category(category)
+                .responsible(responsible)
+                .acquisitionDate(dto.acquisitionDate())
+                .acquisitionValue(dto.acquisitionValue())
+                .conservationState(dto.conservationState())
                 .build();
     }
 
@@ -45,6 +52,11 @@ public class AssetMapper {
                 asset.getStatus(),
                 sectorMapper.toDTO(asset.getSector(), 0, 0),
                 asset.getCategory() != null ? assetCategoryMapper.toDTO(asset.getCategory()) : null,
+                asset.getResponsible() != null ? employeeMapper.toDTO(asset.getResponsible()) : null,
+                asset.getAcquisitionDate(),
+                asset.getAcquisitionValue(),
+                asset.getConservationState(),
+                asset.getPhotoUrl(),
                 asset.getActive(),
                 asset.getCreatedAt()
         );

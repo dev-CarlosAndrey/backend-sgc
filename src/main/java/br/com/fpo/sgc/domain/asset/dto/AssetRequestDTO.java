@@ -1,9 +1,15 @@
 package br.com.fpo.sgc.domain.asset.dto;
 
+import br.com.fpo.sgc.domain.asset.AssetConservationState;
 import br.com.fpo.sgc.domain.asset.AssetStatus;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
 
 public record AssetRequestDTO(
         @NotBlank(message = "O número de tombamento/patrimônio é obrigatório")
@@ -24,5 +30,15 @@ public record AssetRequestDTO(
         @NotNull(message = "O ID do setor é obrigatório")
         Long sectorId,
 
-        Long categoryId
+        Long categoryId,
+
+        Long responsibleId,
+
+        @PastOrPresent(message = "A data de aquisição não pode ser futura")
+        LocalDate acquisitionDate,
+
+        @DecimalMin(value = "0.0", inclusive = true, message = "O valor de aquisição não pode ser negativo")
+        BigDecimal acquisitionValue,
+
+        AssetConservationState conservationState
 ) {}
