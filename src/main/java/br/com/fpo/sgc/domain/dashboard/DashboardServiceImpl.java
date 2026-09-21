@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -37,10 +38,13 @@ public class DashboardServiceImpl implements DashboardService {
             }
         }
 
-        Map<String, Long> statusCount = new HashMap<>();
+        // Todas as situações, zeradas inclusive, respeitando o filtro de empresa.
+        Map<String, Long> statusCount = new LinkedHashMap<>();
         for (AssetStatus status : AssetStatus.values()) {
-            long count = assetRepository.findByStatusAndActiveTrue(status, null).getTotalElements();
-            statusCount.put(status.name(), count);
+            statusCount.put(status.name(), 0L);
+        }
+        for (Object[] result : assetRepository.countByStatusAndCompanyId(companyId)) {
+            statusCount.put(((AssetStatus) result[0]).name(), (Long) result[1]);
         }
 
         long activeTickets = serviceOrderRepository.countActiveByCompanyId(companyId);

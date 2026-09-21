@@ -43,4 +43,10 @@ public interface AssetRepository extends JpaRepository<Asset, Long> {
             "AND (:companyId IS NULL OR a.sector.building.company.id = :companyId) " +
             "GROUP BY c.id, c.name, a.status")
     List<Object[]> countByCategoryAndStatus(@Param("companyId") Long companyId);
+
+    @Query("SELECT a.status, COUNT(a) FROM Asset a " +
+            "WHERE a.active = true " +
+            "AND (:companyId IS NULL OR a.sector.building.company.id = :companyId) " +
+            "GROUP BY a.status")
+    List<Object[]> countByStatusAndCompanyId(@Param("companyId") Long companyId);
 }

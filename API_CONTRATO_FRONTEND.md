@@ -1,6 +1,6 @@
 # Contrato da API — SGC API (para consumo pelo frontend)
 
-> Gerado em 2026-09-21, a partir do código-fonte real de `src/main/java/br/com/fpo/sgc` e das migrations `V1–V17`, imediatamente após o fechamento da **Fase 1** do MVP (núcleo administrativo, sem WhatsApp). Descreve exatamente o que existe e funciona hoje no backend — nada de especulação sobre funcionalidades futuras. Ver `PLANO_IMPLEMENTACAO_MVP.md` neste mesmo repositório para o roadmap completo e o que ainda **não** foi implementado (WhatsApp, notificações, relatórios avançados).
+> Atualizado em 2026-09-21, a partir do código-fonte real de `src/main/java/br/com/fpo/sgc` e das migrations `V1–V19`, e conferido contra respostas reais da API rodando (formato de paginação, filtros, CSV, RBAC, CORS). Descreve o que existe e funciona hoje no backend — sem especulação sobre funcionalidades futuras. Cobre o núcleo administrativo (Fase 1), as notificações por e-mail e os relatórios (RF19/RF20). Ver `PLANO_IMPLEMENTACAO_MVP.md` neste repositório para o roadmap completo e o que ainda **não** foi implementado (WhatsApp).
 
 ## 1. Visão geral
 
@@ -43,7 +43,7 @@ Content-Type: application/json
 ```
 
 - O token expira em **8 horas** (HS256, issuer `sgc-api`).
-- Falha de credenciais retorna erro padrão de autenticação do Spring Security (401/403, sem corpo `ProblemDetail` customizado, pois `AuthenticationManager.authenticate` lança antes do `GlobalExceptionHandler` entrar em ação).
+- Falha de credenciais retorna **403** sem corpo (erro padrão de autenticação do Spring Security, sem `ProblemDetail` customizado, pois `AuthenticationManager.authenticate` lança antes do `GlobalExceptionHandler` entrar em ação).
 
 ### 2.2 Usar o token
 
@@ -67,24 +67,23 @@ Necessário porque, após a implementação de RBAC (seção 4), os endpoints de
 
 ### 3.1 Paginação
 
-Endpoints de listagem aceitam os parâmetros padrão do Spring Data (`?page=0&size=20&sort=campo,asc`) e retornam um envelope `Page`:
+Endpoints de listagem aceitam os parâmetros padrão do Spring Data (`?page=0&size=20&sort=campo,asc`) e retornam um envelope `Page` **serializado como DTO** (`pageSerializationMode = VIA_DTO`): os itens ficam em `content` e os metadados de paginação dentro do objeto `page`, **não** no nível de cima:
 
 ```json
 {
   "content": [ /* array de itens */ ],
-  "totalElements": 42,
-  "totalPages": 3,
-  "number": 0,
-  "size": 20,
-  "first": true,
-  "last": false,
-  "numberOfElements": 20,
-  "sort": { "sorted": true, "unsorted": false, "empty": false },
-  "empty": false
+  "page": {
+    "size": 10,
+    "number": 0,
+    "totalElements": 42,
+    "totalPages": 5
+  }
 }
 ```
 
-O tamanho padrão de página e o campo de ordenação padrão variam por endpoint (documentado por módulo abaixo).
+Não existem `first`, `last`, `numberOfElements`, `sort` nem `empty` — se precisar, derive: `last = page.number + 1 >= page.totalPages`, `empty = content.length === 0`. `number` é o índice da página, começando em **0**.
+
+Tamanho padrão de página (quando `size` não é enviado): **10** em usuários, bens e ordens de serviço; **20** em todos os demais (empresas, prédios, setores, funcionários, categorias, movimentações, marcas, materiais, produtos e log de auditoria). O campo de ordenação padrão varia por endpoint (documentado por módulo abaixo).
 
 ### 3.2 Formato de erro (RFC 7807 `ProblemDetail`)
 
@@ -105,6 +104,7 @@ Todo erro de negócio/validação/recurso-não-encontrado retorna um corpo `Prob
 | Recurso não encontrado (`EntityNotFoundException`) | 404 | `.../errors/not-found` |
 | Violação de regra de negócio (`BusinessException`, ex.: duplicidade) | 400 | `.../errors/business-error` |
 | Arquivo de upload maior que o permitido | 400 | `.../errors/file-too-large` |
+| Parâmetro de rota/query com tipo inválido (data mal formatada, valor de enum inexistente) | 400 | `.../errors/invalid-parameter`, `title: "Parâmetro Inválido"`, `detail` cita o nome do parâmetro |
 | Falha de validação de campos (`@Valid`) | 422 | `.../errors/invalid-data`, com `errors: { campo: mensagem }` adicional no corpo |
 | Sem permissão para a ação (`@PreAuthorize` reprovado) | 403 | resposta padrão do Spring Security, sem `ProblemDetail` |
 | Não autenticado / token ausente-inválido | 403 | idem |
@@ -148,7 +148,7 @@ Uma chamada fora do papel permitido retorna **403 Forbidden** sem corpo `Problem
 | `Role` | `ADMIN`, `TECHNICIAN`, `USER` |
 | `AssetStatus` | `AVAILABLE`, `IN_USE`, `IN_MAINTENANCE`, `DISCARDED` |
 | `AssetConservationState` | `NEW`, `GOOD`, `REGULAR`, `BAD`, `UNSERVICEABLE` |
-| `ServiceOrderStatus` | `OPEN`, `IN_PROGRESS`, `RESOLVED`, `CANCELLED` (⚠️ `CANCELLED` existe no enum mas **nenhum endpoint hoje produz essa transição** — não há fluxo de cancelamento implementado) |
+| `ServiceOrderStatus` | `OPEN`, `IN_PROGRESS`, `RESOLVED`, `CANCELLED` (`CANCELLED` é produzido por `PATCH /service-orders/{id}/status`; `RESOLVED` só por `PATCH /service-orders/{id}/resolve` — ver 6.10) |
 | `ServiceOrderPriority` | `LOW`, `MEDIUM`, `HIGH`, `URGENT` |
 | `ServiceOrderChannel` | `PANEL`, `WHATSAPP` (⚠️ hoje toda OS criada via API vem sempre como `PANEL` — o canal `WHATSAPP` está reservado para quando a Fase 2 for implementada, mas ainda não existe nenhum fluxo que o produza) |
 
@@ -513,7 +513,7 @@ Content-Type: application/json
 
 "Laudo técnico / solução aplicada em texto livre"
 ```
-O corpo é uma **string JSON pura** (não um objeto `{ solutionDetails: ... }`), e `cost` é um **query param opcional** (`BigDecimal`) — se omitido, a OS é resolvida sem custo registrado. Retorna 400 (`BusinessException`) se a OS já estiver `RESOLVED`.
+O corpo é uma **string JSON pura** (não um objeto `{ solutionDetails: ... }`), e `cost` é um **query param opcional** (`BigDecimal`) — se omitido, a OS é resolvida sem custo registrado. Retorna 400 (`BusinessException`) se a OS já estiver `RESOLVED` **ou `CANCELLED`** (uma OS cancelada não pode ser resolvida).
 
 **`ServiceOrderResponseDTO`:**
 ```json
@@ -562,7 +562,7 @@ Regras (violação → **400**): `IN_PROGRESS` exige técnico já atribuído; `C
 ```
 `previousStatus` é `null` no registro de abertura. OS criadas antes de 2026-09-21 não têm histórico retroativo.
 
-**Notificações:** criar, atribuir técnico, alterar status e resolver disparam notificação **por e-mail** ao solicitante e ao técnico (o WhatsApp ainda não existe). É assíncrono e não interfere na resposta da API; não há endpoint para consultar notificações.
+**Notificações:** criar, atribuir técnico, alterar status e resolver disparam notificação **por e-mail** ao solicitante e ao técnico (o WhatsApp ainda não existe; e o envio só ocorre se o backend estiver com `SENDGRID_API_KEY` configurada e o usuário tiver e-mail). É assíncrono e não interfere na resposta da API; não há endpoint para consultar notificações.
 
 ### 6.11 Marcas — `/api/v1/brands`
 
@@ -643,8 +643,8 @@ Somente leitura. Registrado automaticamente pelo backend em toda operação de c
   "id": 1,
   "entityName": "Asset",
   "entityId": 5,
-  "action": "CREATE | UPDATE | DELETE | ASSIGN_TECHNICIAN | RESOLVE | ...",
-  "performedBy": "string (e-mail ou identificador de quem executou)",
+  "action": "CREATE | UPDATE | DELETE | ASSIGN_TECHNICIAN | RESOLVE | CHANGE_STATUS | ...",
+  "performedBy": "string (nome do usuário autenticado que executou a ação — o mesmo valor do login —, ou SYSTEM se não havia usuário)",
   "details": "string (texto livre descrevendo a ação)",
   "createdAt": "2026-09-21T12:00:00Z"
 }
@@ -656,7 +656,7 @@ Somente leitura. Registrado automaticamente pelo backend em toda operação de c
 |---|---|---|---|
 | GET | `/?companyId=1` (query param opcional) | **ADMIN apenas** | Indicadores agregados |
 
-Sem `companyId`, os indicadores são globais (todas as empresas). Todos os valores são calculados a partir de dados reais (sem mocks, desde 2026-09-21):
+Sem `companyId`, os indicadores são globais (todas as empresas); com `companyId`, **todos** os indicadores (inclusive `assetsByStatus` e `assetsByCompany`) são restritos àquela empresa — um `companyId` sem bens devolve tudo zerado. `assetsByStatus` traz sempre as 4 situações, zeradas inclusive. Todos os valores são calculados a partir de dados reais (sem mocks, desde 2026-09-21):
 
 ```json
 {

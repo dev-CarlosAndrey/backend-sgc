@@ -173,6 +173,9 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
         if (so.getStatus() == ServiceOrderStatus.RESOLVED) {
             throw new BusinessException("Esta ordem de serviço já se encontra finalizada.");
         }
+        if (so.getStatus() == ServiceOrderStatus.CANCELLED) {
+            throw new BusinessException("Não é possível resolver uma ordem de serviço cancelada.");
+        }
 
         ServiceOrderStatus previousStatus = so.getStatus();
         so.setSolutionDetails(solutionDetails);
