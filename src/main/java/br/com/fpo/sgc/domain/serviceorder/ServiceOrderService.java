@@ -2,6 +2,8 @@ package br.com.fpo.sgc.domain.serviceorder;
 
 import br.com.fpo.sgc.domain.serviceorder.dto.ServiceOrderRequestDTO;
 import br.com.fpo.sgc.domain.serviceorder.dto.ServiceOrderResponseDTO;
+import br.com.fpo.sgc.domain.serviceorder.dto.ServiceOrderStatusChangeRequestDTO;
+import br.com.fpo.sgc.domain.serviceorder.statuslog.dto.ServiceOrderStatusLogResponseDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -17,5 +19,7 @@ public interface ServiceOrderService {
     Page<ServiceOrderResponseDTO> findByTechnicianId(Long technicianId, Pageable pageable);
     ServiceOrderResponseDTO assignTechnician(Long id, Long technicianId);
     ServiceOrderResponseDTO resolveOrder(Long id, String solutionDetails, BigDecimal cost);
+    ServiceOrderResponseDTO changeStatus(Long id, ServiceOrderStatusChangeRequestDTO dto);
+    Page<ServiceOrderStatusLogResponseDTO> findStatusHistory(Long id, Pageable pageable);
     void delete(Long id);
 }

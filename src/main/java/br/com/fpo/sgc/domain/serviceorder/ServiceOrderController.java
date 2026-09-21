@@ -2,6 +2,8 @@ package br.com.fpo.sgc.domain.serviceorder;
 
 import br.com.fpo.sgc.domain.serviceorder.dto.ServiceOrderRequestDTO;
 import br.com.fpo.sgc.domain.serviceorder.dto.ServiceOrderResponseDTO;
+import br.com.fpo.sgc.domain.serviceorder.dto.ServiceOrderStatusChangeRequestDTO;
+import br.com.fpo.sgc.domain.serviceorder.statuslog.dto.ServiceOrderStatusLogResponseDTO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -80,6 +82,21 @@ public class ServiceOrderController {
             @RequestBody String solutionDetails,
             @RequestParam(required = false) BigDecimal cost) {
         return ResponseEntity.ok(serviceOrderService.resolveOrder(id, solutionDetails, cost));
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<ServiceOrderResponseDTO> changeStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody ServiceOrderStatusChangeRequestDTO dto) {
+        return ResponseEntity.ok(serviceOrderService.changeStatus(id, dto));
+    }
+
+    @GetMapping("/{id}/status-history")
+    public ResponseEntity<Page<ServiceOrderStatusLogResponseDTO>> findStatusHistory(
+            @PathVariable Long id,
+            @PageableDefault(size = 10, sort = "createdAt") Pageable pageable) {
+        return ResponseEntity.ok(serviceOrderService.findStatusHistory(id, pageable));
     }
 
     @PreAuthorize("hasRole('ADMIN')")

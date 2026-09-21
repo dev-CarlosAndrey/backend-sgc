@@ -9,13 +9,19 @@ import br.com.fpo.sgc.domain.location.sector.Sector;
 import br.com.fpo.sgc.domain.location.sector.SectorRepository;
 import br.com.fpo.sgc.domain.serviceorder.dto.ServiceOrderRequestDTO;
 import br.com.fpo.sgc.domain.serviceorder.dto.ServiceOrderResponseDTO;
+import br.com.fpo.sgc.domain.serviceorder.dto.ServiceOrderStatusChangeRequestDTO;
 import br.com.fpo.sgc.domain.serviceorder.mapper.ServiceOrderMapper;
+import br.com.fpo.sgc.domain.serviceorder.statuslog.ServiceOrderStatusLog;
+import br.com.fpo.sgc.domain.serviceorder.statuslog.ServiceOrderStatusLogRepository;
+import br.com.fpo.sgc.domain.serviceorder.statuslog.dto.ServiceOrderStatusLogResponseDTO;
 import br.com.fpo.sgc.domain.user.User;
 import br.com.fpo.sgc.domain.user.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +36,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
     private final UserRepository userRepository;
     private final SectorRepository sectorRepository;
     private final AssetRepository assetRepository;
+    private final ServiceOrderStatusLogRepository statusLogRepository;
     private final AuditLogService auditLogService;
     private final ServiceOrderMapper serviceOrderMapper;
 
@@ -56,6 +63,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
         so.setChannel(ServiceOrderChannel.PANEL);
 
         ServiceOrder savedSo = serviceOrderRepository.save(so);
+        logStatusChange(savedSo, null, ServiceOrderStatus.OPEN, "Ordem de serviço aberta");
 
         // Registrar auditoria
         auditLogService.log(
@@ -116,10 +124,13 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
         User technician = userRepository.findById(technicianId)
                 .orElseThrow(() -> new EntityNotFoundException("Técnico não encontrado com ID: " + technicianId));
 
+        ServiceOrderStatus previousStatus = so.getStatus();
         so.setTechnician(technician);
         so.setStatus(ServiceOrderStatus.IN_PROGRESS);
 
         ServiceOrder updatedSo = serviceOrderRepository.save(so);
+        logStatusChange(updatedSo, previousStatus, ServiceOrderStatus.IN_PROGRESS,
+                "Técnico " + technician.getName() + " atribuído");
 
         // Registrar auditoria
         auditLogService.log(
@@ -143,6 +154,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
             throw new BusinessException("Esta ordem de serviço já se encontra finalizada.");
         }
 
+        ServiceOrderStatus previousStatus = so.getStatus();
         so.setSolutionDetails(solutionDetails);
         so.setStatus(ServiceOrderStatus.RESOLVED);
         so.setClosedAt(Instant.now());
@@ -154,6 +166,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
         }
 
         ServiceOrder resolvedSo = serviceOrderRepository.save(so);
+        logStatusChange(resolvedSo, previousStatus, ServiceOrderStatus.RESOLVED, solutionDetails);
 
         // Registrar auditoria
         String performedBy = (resolvedSo.getTechnician() != null) ? resolvedSo.getTechnician().getEmail() : "SYSTEM";
@@ -166,6 +179,84 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
         );
 
         return serviceOrderMapper.toDTO(resolvedSo);
+    }
+
+    @Override
+    @Transactional
+    public ServiceOrderResponseDTO changeStatus(Long id, ServiceOrderStatusChangeRequestDTO dto) {
+        ServiceOrder so = serviceOrderRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Ordem de serviço não encontrada com ID: " + id));
+
+        ServiceOrderStatus previousStatus = so.getStatus();
+        ServiceOrderStatus newStatus = dto.status();
+
+        if (previousStatus == ServiceOrderStatus.RESOLVED || previousStatus == ServiceOrderStatus.CANCELLED) {
+            throw new BusinessException("Não é possível alterar o status de uma ordem de serviço já finalizada ou cancelada.");
+        }
+        if (newStatus == previousStatus) {
+            throw new BusinessException("A ordem de serviço já se encontra no status " + newStatus + ".");
+        }
+        if (newStatus == ServiceOrderStatus.RESOLVED) {
+            throw new BusinessException("Para resolver a ordem de serviço, utilize o endpoint de resolução (com laudo técnico).");
+        }
+        if (newStatus == ServiceOrderStatus.OPEN) {
+            throw new BusinessException("Não é possível reabrir uma ordem de serviço em andamento.");
+        }
+        if (newStatus == ServiceOrderStatus.IN_PROGRESS && so.getTechnician() == null) {
+            throw new BusinessException("Atribua um técnico antes de colocar a ordem de serviço em andamento.");
+        }
+
+        so.setStatus(newStatus);
+
+        if (newStatus == ServiceOrderStatus.CANCELLED) {
+            so.setClosedAt(Instant.now());
+            if (so.getAsset() != null) {
+                so.getAsset().setStatus(AssetStatus.IN_USE);
+                assetRepository.save(so.getAsset());
+            }
+        }
+
+        ServiceOrder updatedSo = serviceOrderRepository.save(so);
+        logStatusChange(updatedSo, previousStatus, newStatus, dto.note());
+
+        auditLogService.log(
+                "ServiceOrder",
+                updatedSo.getId(),
+                "CHANGE_STATUS",
+                currentUser(),
+                "Status alterado de " + previousStatus + " para " + newStatus
+        );
+
+        return serviceOrderMapper.toDTO(updatedSo);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ServiceOrderStatusLogResponseDTO> findStatusHistory(Long id, Pageable pageable) {
+        if (!serviceOrderRepository.existsById(id)) {
+            throw new EntityNotFoundException("Ordem de serviço não encontrada com ID: " + id);
+        }
+        return statusLogRepository.findByServiceOrderIdAndActiveTrue(id, pageable)
+                .map(ServiceOrderStatusLogResponseDTO::fromEntity);
+    }
+
+    private void logStatusChange(ServiceOrder so, ServiceOrderStatus previous, ServiceOrderStatus next, String note) {
+        statusLogRepository.save(ServiceOrderStatusLog.builder()
+                .serviceOrder(so)
+                .previousStatus(previous)
+                .newStatus(next)
+                .changedBy(currentUser())
+                .note(note)
+                .build());
+    }
+
+    // Usuário autenticado na requisição; "SYSTEM" quando não há (mesmo critério do AuditLogServiceImpl).
+    private String currentUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getName())) {
+            return "SYSTEM";
+        }
+        return auth.getName();
     }
 
     @Override
