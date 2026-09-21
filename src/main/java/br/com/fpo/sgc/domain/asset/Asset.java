@@ -1,6 +1,7 @@
 package br.com.fpo.sgc.domain.asset;
 
 import br.com.fpo.sgc.common.entity.BaseEntity;
+import br.com.fpo.sgc.domain.asset.category.AssetCategory;
 import br.com.fpo.sgc.domain.location.sector.Sector;
 import jakarta.persistence.*;
 import lombok.*;
@@ -40,4 +41,8 @@ public class Asset extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sector_id", nullable = false)
     private Sector sector;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private AssetCategory category;
 }

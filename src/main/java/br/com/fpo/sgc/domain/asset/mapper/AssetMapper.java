@@ -1,6 +1,8 @@
 package br.com.fpo.sgc.domain.asset.mapper;
 
 import br.com.fpo.sgc.domain.asset.Asset;
+import br.com.fpo.sgc.domain.asset.category.AssetCategory;
+import br.com.fpo.sgc.domain.asset.category.mapper.AssetCategoryMapper;
 import br.com.fpo.sgc.domain.asset.dto.AssetRequestDTO;
 import br.com.fpo.sgc.domain.asset.dto.AssetResponseDTO;
 import br.com.fpo.sgc.domain.location.sector.Sector;
@@ -13,8 +15,9 @@ import org.springframework.stereotype.Component;
 public class AssetMapper {
 
     private final SectorMapper sectorMapper;
+    private final AssetCategoryMapper assetCategoryMapper;
 
-    public Asset toEntity(AssetRequestDTO dto, Sector sector) {
+    public Asset toEntity(AssetRequestDTO dto, Sector sector, AssetCategory category) {
         if (dto == null) return null;
 
         return Asset.builder()
@@ -25,6 +28,7 @@ public class AssetMapper {
                 .serialNumber(dto.serialNumber())
                 .status(dto.status())
                 .sector(sector)
+                .category(category)
                 .build();
     }
 
@@ -40,6 +44,7 @@ public class AssetMapper {
                 asset.getSerialNumber(),
                 asset.getStatus(),
                 sectorMapper.toDTO(asset.getSector(), 0, 0),
+                asset.getCategory() != null ? assetCategoryMapper.toDTO(asset.getCategory()) : null,
                 asset.getActive(),
                 asset.getCreatedAt()
         );

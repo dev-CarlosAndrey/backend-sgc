@@ -1,6 +1,8 @@
 package br.com.fpo.sgc.domain.asset;
 
 import br.com.fpo.sgc.common.exception.BusinessException;
+import br.com.fpo.sgc.domain.asset.category.AssetCategory;
+import br.com.fpo.sgc.domain.asset.category.AssetCategoryRepository;
 import br.com.fpo.sgc.domain.asset.dto.AssetRequestDTO;
 import br.com.fpo.sgc.domain.asset.dto.AssetResponseDTO;
 import br.com.fpo.sgc.domain.asset.mapper.AssetMapper;
@@ -20,6 +22,7 @@ public class AssetServiceImpl implements AssetService {
 
     private final AssetRepository assetRepository;
     private final SectorRepository sectorRepository;
+    private final AssetCategoryRepository assetCategoryRepository;
     private final AuditLogService auditLogService;
     private final AssetMapper assetMapper;
 
@@ -33,7 +36,9 @@ public class AssetServiceImpl implements AssetService {
         Sector sector = sectorRepository.findById(dto.sectorId())
                 .orElseThrow(() -> new EntityNotFoundException("Setor não encontrado com ID: " + dto.sectorId()));
 
-        Asset asset = assetMapper.toEntity(dto, sector);
+        AssetCategory category = resolveCategory(dto.categoryId());
+
+        Asset asset = assetMapper.toEntity(dto, sector, category);
         Asset savedAsset = assetRepository.save(asset);
 
         // Registrar auditoria
@@ -89,6 +94,8 @@ public class AssetServiceImpl implements AssetService {
         Sector sector = sectorRepository.findById(dto.sectorId())
                 .orElseThrow(() -> new EntityNotFoundException("Setor não encontrado com ID: " + dto.sectorId()));
 
+        AssetCategory category = resolveCategory(dto.categoryId());
+
         asset.setTagNumber(dto.tagNumber());
         asset.setName(dto.name());
         asset.setDescription(dto.description());
@@ -96,6 +103,7 @@ public class AssetServiceImpl implements AssetService {
         asset.setSerialNumber(dto.serialNumber());
         asset.setStatus(dto.status());
         asset.setSector(sector);
+        asset.setCategory(category);
 
         Asset updatedAsset = assetRepository.save(asset);
 
@@ -128,5 +136,12 @@ public class AssetServiceImpl implements AssetService {
                 "ADMIN",
                 "Ativo tombamento " + asset.getTagNumber() + " inativado"
         );
+    }
+
+    private AssetCategory resolveCategory(Long categoryId) {
+        if (categoryId == null) return null;
+
+        return assetCategoryRepository.findById(categoryId)
+                .orElseThrow(() -> new EntityNotFoundException("Categoria de bem não encontrada com ID: " + categoryId));
     }
 }

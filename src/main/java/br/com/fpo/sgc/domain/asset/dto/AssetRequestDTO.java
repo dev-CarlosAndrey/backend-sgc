@@ -22,5 +22,7 @@ public record AssetRequestDTO(
         AssetStatus status,
 
         @NotNull(message = "O ID do setor é obrigatório")
-        Long sectorId
+        Long sectorId,
+
+        Long categoryId
 ) {}
