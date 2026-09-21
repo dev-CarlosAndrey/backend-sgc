@@ -1,0 +1,661 @@
+# Contrato da API — SGC API (para consumo pelo frontend)
+
+> Gerado em 2026-09-21, a partir do código-fonte real de `src/main/java/br/com/fpo/sgc` e das migrations `V1–V17`, imediatamente após o fechamento da **Fase 1** do MVP (núcleo administrativo, sem WhatsApp). Descreve exatamente o que existe e funciona hoje no backend — nada de especulação sobre funcionalidades futuras. Ver `PLANO_IMPLEMENTACAO_MVP.md` neste mesmo repositório para o roadmap completo e o que ainda **não** foi implementado (WhatsApp, notificações, relatórios avançados).
+
+## 1. Visão geral
+
+- **Base URL (dev local)**: `http://localhost:8080` (porta configurável via env var `PORT`).
+- **Prefixo de todos os recursos de negócio**: `/api/v1/...`.
+- **Formato**: JSON (`Content-Type: application/json`), exceto os dois endpoints de upload de arquivo, que usam `multipart/form-data`.
+- **Autenticação**: JWT Bearer, stateless (sem sessão/cookie).
+- **CORS**: liberado para qualquer origem (`allowedOriginPatterns: *`), métodos `GET, POST, PUT, PATCH, DELETE, OPTIONS`, headers `Authorization, Content-Type`, com `allowCredentials: true`. Não há necessidade de configuração adicional de CORS no frontend além de enviar o header `Authorization`.
+- **Documentação interativa viva**: `GET /swagger-ui.html` (sem autenticação) — útil para conferir/testar qualquer endpoint descrito aqui em tempo real, pois é gerada a partir do mesmo código-fonte.
+
+## 2. Autenticação
+
+### 2.1 Login
+
+```
+POST /api/v1/auth/login
+Content-Type: application/json
+(sem autenticação — endpoint público)
+```
+
+**Request body:**
+```json
+{
+  "username": "admin",
+  "password": "Admin@123"
+}
+```
+
+⚠️ **`username` é o campo `name` do usuário, não o e-mail.** O login busca o usuário por `name` (`UserRepository.findByNameAndActiveTrue`), então o "nome de usuário" cadastrado é literalmente o valor usado para logar — trate esse campo como um "login"/"username" na UI, não confunda com o campo `email` (que existe separadamente e serve apenas como e-mail de contato/identificação, não é usado no login hoje).
+
+**Response 200:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "userId": 5,
+  "name": "admin",
+  "email": "admin@sgc.local",
+  "role": "ADMIN"
+}
+```
+
+- O token expira em **8 horas** (HS256, issuer `sgc-api`).
+- Falha de credenciais retorna erro padrão de autenticação do Spring Security (401/403, sem corpo `ProblemDetail` customizado, pois `AuthenticationManager.authenticate` lança antes do `GlobalExceptionHandler` entrar em ação).
+
+### 2.2 Usar o token
+
+Em toda requisição autenticada, enviar:
+```
+Authorization: Bearer <token>
+```
+
+Requisição sem token ou com token inválido/expirado em rota protegida → **403 Forbidden** (o `SecurityFilter` apenas ignora tokens inválidos e deixa a cadeia de filtros do Spring Security barrar o acesso — não é um 401 com `WWW-Authenticate`, é 403 puro).
+
+### 2.3 Usuário administrador de bootstrap (ambiente local/dev)
+
+Criado pela migration `V16__seed_bootstrap_admin_user.sql`:
+- **username**: `admin`
+- **senha**: `Admin@123`
+- **role**: `ADMIN`
+
+Necessário porque, após a implementação de RBAC (seção 4), os endpoints de escrita de `UserController` passaram a exigir `ADMIN` — sem esse usuário semente não seria possível criar o primeiro usuário via API. **Trocar essa senha antes de qualquer ambiente exposto/demonstração real.**
+
+## 3. Convenções gerais
+
+### 3.1 Paginação
+
+Endpoints de listagem aceitam os parâmetros padrão do Spring Data (`?page=0&size=20&sort=campo,asc`) e retornam um envelope `Page`:
+
+```json
+{
+  "content": [ /* array de itens */ ],
+  "totalElements": 42,
+  "totalPages": 3,
+  "number": 0,
+  "size": 20,
+  "first": true,
+  "last": false,
+  "numberOfElements": 20,
+  "sort": { "sorted": true, "unsorted": false, "empty": false },
+  "empty": false
+}
+```
+
+O tamanho padrão de página e o campo de ordenação padrão variam por endpoint (documentado por módulo abaixo).
+
+### 3.2 Formato de erro (RFC 7807 `ProblemDetail`)
+
+Todo erro de negócio/validação/recurso-não-encontrado retorna um corpo `ProblemDetail`:
+
+```json
+{
+  "type": "https://sgc.fpo.edu.br/errors/not-found",
+  "title": "Recurso Não Encontrado",
+  "status": 404,
+  "detail": "Ativo não encontrado com ID: 99",
+  "timestamp": "2026-09-21T12:00:00Z"
+}
+```
+
+| Situação | HTTP status | `type` |
+|---|---|---|
+| Recurso não encontrado (`EntityNotFoundException`) | 404 | `.../errors/not-found` |
+| Violação de regra de negócio (`BusinessException`, ex.: duplicidade) | 400 | `.../errors/business-error` |
+| Arquivo de upload maior que o permitido | 400 | `.../errors/file-too-large` |
+| Falha de validação de campos (`@Valid`) | 422 | `.../errors/invalid-data`, com `errors: { campo: mensagem }` adicional no corpo |
+| Sem permissão para a ação (`@PreAuthorize` reprovado) | 403 | resposta padrão do Spring Security, sem `ProblemDetail` |
+| Não autenticado / token ausente-inválido | 403 | idem |
+
+### 3.3 Soft delete e timestamps
+
+- Nenhum recurso é excluído fisicamente. `DELETE` marca `active = false`.
+- Toda entidade tem `active` (boolean) e `createdAt` (ISO-8601 UTC) nos DTOs de resposta; algumas também expõem `updatedAt` internamente, mas isso não é enviado no DTO salvo indicado abaixo.
+- Listagens (`findAll`, `findBy...`) **só retornam registros com `active = true`**. Um recurso inativado deixa de aparecer nas listas, mas `GET /{id}` direto ainda pode retorná-lo (não há filtro de `active` na busca por ID).
+
+### 3.4 Upload de arquivos
+
+Dois endpoints aceitam `multipart/form-data`, campo do arquivo sempre chamado `file`:
+- `POST /api/v1/companies/{id}/logo` — logo da empresa (`image/png`, `image/jpeg`, `image/svg+xml`, até 2MB).
+- `POST /api/v1/assets/{id}/photo` — foto do bem patrimonial (`image/png`, `image/jpeg`, `image/webp`, até 5MB).
+
+O limite geral do Tomcat/Spring para multipart é 5MB por arquivo e por requisição (`application.yml`). Arquivos são salvos em `uploads/<subdir>/<uuid>.<ext>` e servidos publicamente (sem autenticação) em `GET /uploads/**`. O campo `*Url`/`photoUrl`/`logoUrl` retornado já vem no formato `/uploads/<subdir>/<arquivo>` — o frontend só precisa concatenar com a base URL da API para exibir a imagem.
+
+## 4. Perfis de acesso (RBAC)
+
+Enum `Role`: `ADMIN`, `TECHNICIAN`, `USER` (embutido no JWT como claim `role`, e como authority Spring Security `ROLE_<role>`).
+
+Política implementada (`@PreAuthorize` a nível de método, habilitado via `@EnableMethodSecurity`):
+
+| Módulo | Leitura (GET) | Escrita (POST/PUT/PATCH/DELETE) |
+|---|---|---|
+| Usuários, Empresas, Prédios, Setores, Funcionários, Marcas, Materiais, Produtos, Categorias de Bem, Ativos (incl. upload de foto/logo), Movimentações de Ativo | Qualquer autenticado | **ADMIN** |
+| Ordem de Serviço — abrir (`POST`) | — | Qualquer autenticado (`ADMIN`/`TECHNICIAN`/`USER`) |
+| Ordem de Serviço — atribuir técnico, excluir | Qualquer autenticado | **ADMIN** |
+| Ordem de Serviço — resolver | — | **ADMIN** ou **TECHNICIAN** |
+| Ordem de Serviço — consultas (por status/solicitante/técnico/bem/id/lista) | Qualquer autenticado | — |
+| Dashboard | **ADMIN** apenas | — |
+| Log de auditoria | Qualquer autenticado (sem restrição adicional) | — (somente leitura) |
+
+Uma chamada fora do papel permitido retorna **403 Forbidden** sem corpo `ProblemDetail` (resposta padrão do Spring Security). O frontend deve tratar 403 genericamente como "sem permissão" nesses casos, e esconder/desabilitar ações de escrita nos módulos administrativos para usuários `TECHNICIAN`/`USER`.
+
+## 5. Enums do sistema
+
+| Enum | Valores |
+|---|---|
+| `Role` | `ADMIN`, `TECHNICIAN`, `USER` |
+| `AssetStatus` | `AVAILABLE`, `IN_USE`, `IN_MAINTENANCE`, `DISCARDED` |
+| `AssetConservationState` | `NEW`, `GOOD`, `REGULAR`, `BAD`, `UNSERVICEABLE` |
+| `ServiceOrderStatus` | `OPEN`, `IN_PROGRESS`, `RESOLVED`, `CANCELLED` (⚠️ `CANCELLED` existe no enum mas **nenhum endpoint hoje produz essa transição** — não há fluxo de cancelamento implementado) |
+| `ServiceOrderPriority` | `LOW`, `MEDIUM`, `HIGH`, `URGENT` |
+| `ServiceOrderChannel` | `PANEL`, `WHATSAPP` (⚠️ hoje toda OS criada via API vem sempre como `PANEL` — o canal `WHATSAPP` está reservado para quando a Fase 2 for implementada, mas ainda não existe nenhum fluxo que o produza) |
+
+## 6. Endpoints por módulo
+
+Nas tabelas abaixo, **Auth** indica o requisito de acesso: `Autenticado` (qualquer role), `ADMIN`, `ADMIN/TECHNICIAN`, ou `Público` (sem token).
+
+### 6.1 Autenticação — `/api/v1/auth`
+
+| Método | Path | Auth | Descrição |
+|---|---|---|---|
+| POST | `/login` | Público | Ver seção 2.1 |
+
+### 6.2 Usuários — `/api/v1/users`
+
+| Método | Path | Auth | Descrição |
+|---|---|---|---|
+| POST | `/` | ADMIN | Cria usuário. Body: `UserRequestDTO` |
+| GET | `/{id}` | Autenticado | Busca por ID |
+| GET | `/` | Autenticado | Lista paginada (`size=10`, `sort=name`) |
+| PUT | `/{id}` | ADMIN | Atualiza. Body: `UserRequestDTO` |
+| DELETE | `/{id}` | ADMIN | Soft delete |
+
+**`UserRequestDTO`** (request):
+```json
+{
+  "name": "string (3-100, obrigatório, é o login)",
+  "email": "string (email válido, obrigatório, único)",
+  "password": "string (mín. 6, obrigatório na criação; no update, se omitido/vazio mantém a senha atual)",
+  "phone": "string (opcional)",
+  "role": "ADMIN | TECHNICIAN | USER (obrigatório)"
+}
+```
+
+**`UserResponseDTO`** (response):
+```json
+{
+  "id": 1,
+  "name": "string",
+  "email": "string",
+  "phone": "string | null",
+  "role": "ADMIN | TECHNICIAN | USER",
+  "active": true,
+  "createdAt": "2026-09-21T12:00:00Z"
+}
+```
+
+### 6.3 Empresas — `/api/v1/companies`
+
+| Método | Path | Auth | Descrição |
+|---|---|---|---|
+| POST | `/` | ADMIN | Cria empresa. Body: `CompanyRequestDTO` |
+| GET | `/{id}` | Autenticado | Busca por ID |
+| GET | `/` | Autenticado | Lista paginada |
+| PUT | `/{id}` | ADMIN | Atualiza |
+| DELETE | `/{id}` | ADMIN | Soft delete |
+| POST | `/{id}/logo` (multipart, campo `file`) | ADMIN | Upload do logo |
+
+**`CompanyRequestDTO`:**
+```json
+{
+  "companyName": "string (obrigatório)",
+  "cnpj": "string (obrigatório, único)",
+  "email": "string (email válido, obrigatório)",
+  "phone": "string (obrigatório)",
+  "logoUrl": "string (opcional — normalmente não enviado manualmente, preenchido via upload)",
+  "active": true
+}
+```
+
+**`CompanyResponseDTO`:**
+```json
+{
+  "id": 1,
+  "companyName": "string",
+  "cnpj": "string",
+  "email": "string",
+  "phone": "string",
+  "logoUrl": "string | null",
+  "active": true,
+  "totalBuildings": 3,
+  "totalSectors": 0
+}
+```
+⚠️ `totalSectors` está sempre `0` hoje — é calculado em `CompanyServiceImpl.mapToDTO` mas o valor nunca é buscado de fato (bug/lacuna conhecida, não corrigido ainda).
+
+### 6.4 Prédios — `/api/v1/buildings`
+
+| Método | Path | Auth | Descrição |
+|---|---|---|---|
+| POST | `/` | ADMIN | Cria prédio. Body: `BuildingRequestDTO` |
+| GET | `/` | Autenticado | Lista paginada |
+| GET | `/{id}` | Autenticado | Busca por ID |
+| GET | `/company/{companyId}` | Autenticado | Lista paginada por empresa |
+| PUT | `/{id}` | ADMIN | Atualiza |
+| DELETE | `/{id}` | ADMIN | Soft delete |
+
+**`BuildingRequestDTO`:**
+```json
+{
+  "name": "string (obrigatório)",
+  "address": "string (obrigatório)",
+  "companyId": 1
+}
+```
+
+**`BuildingResponseDTO`:**
+```json
+{
+  "id": 1,
+  "name": "string",
+  "code": "string (gerado automaticamente pelo backend, ex.: BUILD-001 — não enviar no request)",
+  "address": "string",
+  "companyId": 1,
+  "companyName": "string",
+  "linkedSectorsCount": 5
+}
+```
+
+### 6.5 Setores — `/api/v1/sectors`
+
+| Método | Path | Auth | Descrição |
+|---|---|---|---|
+| POST | `/` | ADMIN | Cria setor. Body: `SectorRequestDTO` |
+| GET | `/` | Autenticado | Lista paginada |
+| GET | `/{id}` | Autenticado | Busca por ID |
+| GET | `/building/{buildingId}` | Autenticado | Lista paginada por prédio |
+| PUT | `/{id}` | ADMIN | Atualiza |
+| DELETE | `/{id}` | ADMIN | Soft delete |
+
+**`SectorRequestDTO`:**
+```json
+{
+  "name": "string (2-100, obrigatório)",
+  "buildingId": 1,
+  "active": true,
+  "managerId": 5
+}
+```
+`managerId` referencia um `Employee` (funcionário), não um `User`.
+
+**`SectorResponseDTO`:**
+```json
+{
+  "id": 1,
+  "name": "string",
+  "building": { /* BuildingResponseDTO */ },
+  "managerId": 5,
+  "managerName": "string | null",
+  "managerAvatar": null,
+  "totalAssets": 12,
+  "activeTickets": 2,
+  "active": true,
+  "createdAt": "2026-09-21T12:00:00Z"
+}
+```
+`managerAvatar` está sempre `null` hoje (campo reservado, não implementado).
+
+### 6.6 Funcionários — `/api/v1/employees`
+
+| Método | Path | Auth | Descrição |
+|---|---|---|---|
+| POST | `/` | ADMIN | Cria funcionário. Body: `EmployeeRequestDTO` |
+| GET | `/` | Autenticado | Lista paginada (`size=20`) |
+| GET | `/{id}` | Autenticado | Busca por ID |
+| PUT | `/{id}` | ADMIN | Atualiza |
+| DELETE | `/{id}` | ADMIN | Soft delete |
+
+**`EmployeeRequestDTO`:**
+```json
+{
+  "name": "string (obrigatório)",
+  "cpf": "string (obrigatório, único)",
+  "registrationNumber": "string (matrícula, obrigatório, único)",
+  "email": "string (opcional)",
+  "phone": "string (opcional)",
+  "position": "string (cargo, opcional)",
+  "admissionDate": "2026-01-15 (opcional, LocalDate)",
+  "companyId": 1,
+  "sectorId": 3
+}
+```
+
+**`EmployeeResponseDTO`:**
+```json
+{
+  "id": 1,
+  "name": "string",
+  "cpf": "string",
+  "registrationNumber": "string",
+  "email": "string | null",
+  "phone": "string | null",
+  "position": "string | null",
+  "admissionDate": "2026-01-15",
+  "active": true,
+  "companyId": 1,
+  "companyName": "string",
+  "sectorId": 3,
+  "sectorName": "string | null",
+  "createdAt": "2026-09-21T12:00:00Z"
+}
+```
+
+### 6.7 Bens patrimoniais (Assets) — `/api/v1/assets`
+
+| Método | Path | Auth | Descrição |
+|---|---|---|---|
+| POST | `/` | ADMIN | Cria bem. Body: `AssetRequestDTO` |
+| GET | `/{id}` | Autenticado | Busca por ID |
+| GET | `/tag/{tagNumber}` | Autenticado | Busca por tombamento |
+| GET | `/` | Autenticado | Lista paginada (`size=10`, `sort=name`) |
+| GET | `/sector/{sectorId}` | Autenticado | Lista paginada por setor |
+| GET | `/status/{status}` | Autenticado | Lista paginada por status (`AssetStatus`) |
+| GET | `/category/{categoryId}` | Autenticado | Lista paginada por categoria |
+| GET | `/responsible/{responsibleId}` | Autenticado | Lista paginada por responsável (funcionário) |
+| PUT | `/{id}` | ADMIN | Atualiza |
+| DELETE | `/{id}` | ADMIN | Soft delete |
+| POST | `/{id}/photo` (multipart, campo `file`) | ADMIN | Upload de foto |
+
+**`AssetRequestDTO`:**
+```json
+{
+  "tagNumber": "string (obrigatório, único, tombamento)",
+  "name": "string (2-120, obrigatório)",
+  "description": "string (opcional)",
+  "model": "string (opcional)",
+  "serialNumber": "string (opcional)",
+  "status": "AVAILABLE | IN_USE | IN_MAINTENANCE | DISCARDED (obrigatório)",
+  "sectorId": 1,
+  "categoryId": 2,
+  "responsibleId": 5,
+  "acquisitionDate": "2025-01-10 (opcional, não pode ser futura)",
+  "acquisitionValue": 1500.00,
+  "conservationState": "NEW | GOOD | REGULAR | BAD | UNSERVICEABLE (opcional)"
+}
+```
+`categoryId`, `responsibleId`, `acquisitionDate`, `acquisitionValue`, `conservationState` são **todos opcionais** — um ativo cadastrado sem eles continua válido.
+
+**`AssetResponseDTO`:**
+```json
+{
+  "id": 1,
+  "tagNumber": "string",
+  "name": "string",
+  "description": "string | null",
+  "model": "string | null",
+  "serialNumber": "string | null",
+  "status": "AVAILABLE | IN_USE | IN_MAINTENANCE | DISCARDED",
+  "sector": { /* SectorResponseDTO */ },
+  "category": { /* AssetCategoryResponseDTO | null */ },
+  "responsible": { /* EmployeeResponseDTO | null */ },
+  "acquisitionDate": "2025-01-10 | null",
+  "acquisitionValue": 1500.00,
+  "conservationState": "NEW | GOOD | REGULAR | BAD | UNSERVICEABLE | null",
+  "photoUrl": "/uploads/assets/uuid.jpg | null",
+  "active": true,
+  "createdAt": "2026-09-21T12:00:00Z"
+}
+```
+
+### 6.8 Categorias de bem — `/api/v1/asset-categories`
+
+| Método | Path | Auth | Descrição |
+|---|---|---|---|
+| POST | `/` | ADMIN | Cria categoria. Body: `AssetCategoryRequestDTO` |
+| GET | `/` | Autenticado | Lista paginada (`size=20`, `sort=name`) |
+| GET | `/{id}` | Autenticado | Busca por ID |
+| PUT | `/{id}` | ADMIN | Atualiza |
+| DELETE | `/{id}` | ADMIN | Soft delete |
+
+**`AssetCategoryRequestDTO`:**
+```json
+{
+  "name": "string (2-100, obrigatório, único)",
+  "description": "string (até 255, opcional)",
+  "active": true
+}
+```
+
+**`AssetCategoryResponseDTO`:**
+```json
+{
+  "id": 1,
+  "name": "string",
+  "description": "string | null",
+  "active": true,
+  "createdAt": "2026-09-21T12:00:00Z"
+}
+```
+
+### 6.9 Movimentações de bem — `/api/v1/asset-movements`
+
+Histórico de transferência de um bem entre setores (não é o mesmo que histórico de manutenção — ver 6.10, seção Ordens de Serviço).
+
+| Método | Path | Auth | Descrição |
+|---|---|---|---|
+| POST | `/` | ADMIN | Registra movimentação. Body: `AssetMovementRequestDTO` |
+| GET | `/` | Autenticado | Lista paginada (`size=20`) |
+| GET | `/asset/{assetId}` | Autenticado | Lista paginada por bem |
+
+**`AssetMovementRequestDTO`:**
+```json
+{
+  "assetId": 1,
+  "destinationSectorId": 3,
+  "reason": "string (opcional)"
+}
+```
+O setor de origem é inferido automaticamente a partir do setor atual do bem no momento do registro (não é enviado pelo cliente).
+
+**`AssetMovementResponseDTO`:**
+```json
+{
+  "id": 1,
+  "assetId": 1,
+  "assetTagNumber": "string",
+  "assetName": "string",
+  "originSectorId": 2,
+  "originSectorName": "string",
+  "destinationSectorId": 3,
+  "destinationSectorName": "string",
+  "reason": "string | null",
+  "movementDate": "2026-09-21T12:00:00Z"
+}
+```
+
+### 6.10 Ordens de Serviço — `/api/v1/service-orders`
+
+| Método | Path | Auth | Descrição |
+|---|---|---|---|
+| POST | `/` | Autenticado | Abre chamado. Body: `ServiceOrderRequestDTO` |
+| GET | `/{id}` | Autenticado | Busca por ID |
+| GET | `/` | Autenticado | Lista paginada (`size=10`, `sort=createdAt`) |
+| GET | `/asset/{assetId}` | Autenticado | **Histórico de manutenção do bem** — todas as OS vinculadas a ele |
+| GET | `/status/{status}` | Autenticado | Lista paginada por status |
+| GET | `/requester/{requesterId}` | Autenticado | Lista paginada por solicitante |
+| GET | `/technician/{technicianId}` | Autenticado | Lista paginada por técnico |
+| PATCH | `/{id}/assign-technician/{technicianId}` | ADMIN | Atribui técnico, muda status para `IN_PROGRESS` |
+| PATCH | `/{id}/resolve?cost=150.75` (query param `cost` opcional) | ADMIN ou TECHNICIAN | Resolve a OS, muda status para `RESOLVED` |
+| DELETE | `/{id}` | ADMIN | Soft delete |
+
+**`ServiceOrderRequestDTO`** (usado em `POST /`):
+```json
+{
+  "title": "string (5-150, obrigatório)",
+  "description": "string (obrigatório)",
+  "priority": "LOW | MEDIUM | HIGH | URGENT (obrigatório)",
+  "requesterId": 1,
+  "assetId": 5,
+  "sectorId": 1
+}
+```
+`assetId` é opcional (chamado pode não estar vinculado a um bem específico). Ao vincular um `assetId`, o backend automaticamente muda o `status` do bem para `IN_MAINTENANCE`. Campos que o cliente **não** envia e são definidos automaticamente pelo backend: `status` (sempre inicia `OPEN`) e `channel` (sempre `PANEL` hoje).
+
+**`PATCH /{id}/resolve`** — corpo e query param, não um DTO único:
+```
+PATCH /api/v1/service-orders/5/resolve?cost=150.75
+Content-Type: application/json
+
+"Laudo técnico / solução aplicada em texto livre"
+```
+O corpo é uma **string JSON pura** (não um objeto `{ solutionDetails: ... }`), e `cost` é um **query param opcional** (`BigDecimal`) — se omitido, a OS é resolvida sem custo registrado. Retorna 400 (`BusinessException`) se a OS já estiver `RESOLVED`.
+
+**`ServiceOrderResponseDTO`:**
+```json
+{
+  "id": 1,
+  "title": "string",
+  "description": "string",
+  "status": "OPEN | IN_PROGRESS | RESOLVED | CANCELLED",
+  "priority": "LOW | MEDIUM | HIGH | URGENT",
+  "channel": "PANEL | WHATSAPP",
+  "requester": { /* UserResponseDTO */ },
+  "technician": { /* UserResponseDTO | null */ },
+  "asset": { /* AssetResponseDTO | null */ },
+  "sector": { /* SectorResponseDTO */ },
+  "solutionDetails": "string | null",
+  "closedAt": "2026-09-21T12:00:00Z | null",
+  "cost": 150.75,
+  "active": true,
+  "createdAt": "2026-09-21T12:00:00Z"
+}
+```
+
+### 6.11 Marcas — `/api/v1/brands`
+
+| Método | Path | Auth | Descrição |
+|---|---|---|---|
+| POST | `/` | ADMIN | Cria marca |
+| GET | `/{id}` | Autenticado | Busca por ID |
+| GET | `/` | Autenticado | Lista paginada |
+| PUT | `/{id}` | ADMIN | Atualiza |
+| DELETE | `/{id}` | ADMIN | Soft delete |
+
+**`BrandRequestDTO`:** `{ "name": "string (obrigatório)" }`
+**`BrandResponseDTO`:** `{ "id": 1, "name": "string", "active": true }`
+
+### 6.12 Materiais — `/api/v1/materials`
+
+| Método | Path | Auth | Descrição |
+|---|---|---|---|
+| POST | `/` | ADMIN | Cria material |
+| GET | `/` | Autenticado | Lista paginada (`size=20`) |
+| GET | `/{id}` | Autenticado | Busca por ID |
+| PUT | `/{id}` | ADMIN | Atualiza |
+| DELETE | `/{id}` | ADMIN | Soft delete |
+
+**`MaterialRequestDTO`:**
+```json
+{ "name": "string (2-100, obrigatório)", "category": "string (2-100, obrigatório)", "active": true }
+```
+**`MaterialResponseDTO`:**
+```json
+{ "id": 1, "name": "string", "category": "string", "active": true, "createdAt": "2026-09-21T12:00:00Z" }
+```
+
+### 6.13 Produtos — `/api/v1/products`
+
+Catálogo auxiliar que combina `Brand` + `Material`. **Não vinculado a `Asset`** — não confundir com a categoria de bem (`AssetCategory`, seção 6.8), que é o mecanismo real de categorização de ativos.
+
+| Método | Path | Auth | Descrição |
+|---|---|---|---|
+| POST | `/` | ADMIN | Cria produto |
+| GET | `/` | Autenticado | Lista paginada (`size=20`) |
+| GET | `/{id}` | Autenticado | Busca por ID |
+| PUT | `/{id}` | ADMIN | Atualiza |
+| DELETE | `/{id}` | ADMIN | Soft delete |
+
+**`ProductRequestDTO`:**
+```json
+{
+  "name": "string (2-150, obrigatório)",
+  "description": "string (opcional)",
+  "brandId": 1,
+  "materialId": 2,
+  "active": true
+}
+```
+**`ProductResponseDTO`:**
+```json
+{
+  "id": 1, "name": "string", "description": "string | null",
+  "brandId": 1, "brandName": "string",
+  "materialId": 2, "materialName": "string", "category": "string",
+  "active": true, "createdAt": "2026-09-21T12:00:00Z"
+}
+```
+
+### 6.14 Log de auditoria — `/api/v1/audit-logs`
+
+Somente leitura. Registrado automaticamente pelo backend em toda operação de create/update/delete relevante (não há endpoint de escrita).
+
+| Método | Path | Auth | Descrição |
+|---|---|---|---|
+| GET | `/` | Autenticado | Lista paginada (`size=20`, `sort=createdAt DESC`) |
+| GET | `/{entityName}/{entityId}` | Autenticado | Histórico de um recurso específico (ex.: `/Asset/5`) |
+
+**`AuditLogResponseDTO`:**
+```json
+{
+  "id": 1,
+  "entityName": "Asset",
+  "entityId": 5,
+  "action": "CREATE | UPDATE | DELETE | ASSIGN_TECHNICIAN | RESOLVE | ...",
+  "performedBy": "string (e-mail ou identificador de quem executou)",
+  "details": "string (texto livre descrevendo a ação)",
+  "createdAt": "2026-09-21T12:00:00Z"
+}
+```
+
+### 6.15 Dashboard — `/api/v1/dashboard`
+
+| Método | Path | Auth | Descrição |
+|---|---|---|---|
+| GET | `/?companyId=1` (query param opcional) | **ADMIN apenas** | Indicadores agregados |
+
+Sem `companyId`, os indicadores são globais (todas as empresas). Todos os valores são calculados a partir de dados reais (sem mocks, desde 2026-09-21):
+
+```json
+{
+  "totalAssets": 42,
+  "activeTickets": 5,
+  "maintenanceCost": 1250.50,
+  "depreciatingAssets": 10,
+  "assetsByStatus": { "AVAILABLE": 30, "IN_USE": 8, "IN_MAINTENANCE": 3, "DISCARDED": 1 },
+  "assetsByCompany": { "Faculdade Princesa do Oeste - FPO": 35, "Escola Sônia Burgos": 7 }
+}
+```
+
+- `activeTickets` = OS com status diferente de `RESOLVED`/`CANCELLED`.
+- `maintenanceCost` = soma do campo `cost` das OS resolvidas (só existe se o `cost` foi informado ao resolver — ver 6.10).
+- `depreciatingAssets` = quantidade de ativos com `acquisitionDate` **e** `acquisitionValue` preenchidos (aproximação — o sistema ainda não modela vida útil/valor residual para depreciação de fato).
+
+## 7. O que NÃO existe ainda (não tente consumir)
+
+Para o frontend não implementar telas para funcionalidades inexistentes:
+
+- **Sem integração WhatsApp**: não há webhook, não há chatbot, não há endpoint de envio/recebimento de mensagens.
+- **Sem notificações**: nenhum evento do ciclo de vida da OS (abrir/atribuir/resolver) dispara e-mail, WhatsApp ou qualquer notificação. Não existe endpoint `/notifications` nem afins.
+- **Sem relatórios dedicados**: não há exportação CSV/PDF, nem relatório por período/técnico/categoria — apenas o agregado único do `GET /api/v1/dashboard`.
+- **Sem baixa patrimonial estruturada**: retirar um bem do acervo usa o mecanismo genérico de soft delete (`DELETE /api/v1/assets/{id}`), sem campo de motivo/data/responsável pela baixa.
+- **Sem mudança de status livre em OS**: só existem as transições automáticas via `assign-technician` (→ `IN_PROGRESS`) e `resolve` (→ `RESOLVED`). Não há endpoint para, por exemplo, mover uma OS para `CANCELLED`.
+- **Sem `@PreAuthorize` por dono do recurso**: qualquer usuário autenticado pode ler qualquer OS/ativo/etc. de qualquer solicitante — a restrição de papel (seção 4) é por **tipo de operação**, não por "isso é meu".
+
+## 8. Referências
+
+- Código-fonte: `src/main/java/br/com/fpo/sgc` (organização por domínio: `entity/repository/service+impl/controller/dto/mapper`).
+- Migrations: `src/main/resources/db/migration/V1` a `V17`.
+- Roadmap completo, decisões de arquitetura e status detalhado por requisito funcional: `PLANO_IMPLEMENTACAO_MVP.md` (raiz deste repositório).
+- Swagger UI ao vivo: `GET /swagger-ui.html` no ambiente rodando.
