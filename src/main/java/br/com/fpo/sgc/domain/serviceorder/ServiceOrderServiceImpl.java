@@ -18,6 +18,7 @@ import br.com.fpo.sgc.domain.user.User;
 import br.com.fpo.sgc.domain.user.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
@@ -38,6 +39,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
     private final AssetRepository assetRepository;
     private final ServiceOrderStatusLogRepository statusLogRepository;
     private final AuditLogService auditLogService;
+    private final ApplicationEventPublisher eventPublisher;
     private final ServiceOrderMapper serviceOrderMapper;
 
     @Override
@@ -64,6 +66,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
 
         ServiceOrder savedSo = serviceOrderRepository.save(so);
         logStatusChange(savedSo, null, ServiceOrderStatus.OPEN, "Ordem de serviço aberta");
+        publishEvent(savedSo, ServiceOrderEventType.CREATED);
 
         // Registrar auditoria
         auditLogService.log(
@@ -131,6 +134,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
         ServiceOrder updatedSo = serviceOrderRepository.save(so);
         logStatusChange(updatedSo, previousStatus, ServiceOrderStatus.IN_PROGRESS,
                 "Técnico " + technician.getName() + " atribuído");
+        publishEvent(updatedSo, ServiceOrderEventType.TECHNICIAN_ASSIGNED);
 
         // Registrar auditoria
         auditLogService.log(
@@ -167,6 +171,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
 
         ServiceOrder resolvedSo = serviceOrderRepository.save(so);
         logStatusChange(resolvedSo, previousStatus, ServiceOrderStatus.RESOLVED, solutionDetails);
+        publishEvent(resolvedSo, ServiceOrderEventType.RESOLVED);
 
         // Registrar auditoria
         String performedBy = (resolvedSo.getTechnician() != null) ? resolvedSo.getTechnician().getEmail() : "SYSTEM";
@@ -218,6 +223,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
 
         ServiceOrder updatedSo = serviceOrderRepository.save(so);
         logStatusChange(updatedSo, previousStatus, newStatus, dto.note());
+        publishEvent(updatedSo, ServiceOrderEventType.STATUS_CHANGED);
 
         auditLogService.log(
                 "ServiceOrder",
@@ -238,6 +244,11 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
         }
         return statusLogRepository.findByServiceOrderIdAndActiveTrue(id, pageable)
                 .map(ServiceOrderStatusLogResponseDTO::fromEntity);
+    }
+
+    // Consumido após o commit (ex.: notificações); se a transação sofrer rollback, o evento é descartado.
+    private void publishEvent(ServiceOrder so, ServiceOrderEventType type) {
+        eventPublisher.publishEvent(new ServiceOrderEvent(so.getId(), type, so.getStatus()));
     }
 
     private void logStatusChange(ServiceOrder so, ServiceOrderStatus previous, ServiceOrderStatus next, String note) {
