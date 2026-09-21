@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 public interface ServiceOrderService {
     ServiceOrderResponseDTO create(ServiceOrderRequestDTO dto);
@@ -17,6 +18,7 @@ public interface ServiceOrderService {
     Page<ServiceOrderResponseDTO> findByAssetId(Long assetId, Pageable pageable);
     Page<ServiceOrderResponseDTO> findByRequesterId(Long requesterId, Pageable pageable);
     Page<ServiceOrderResponseDTO> findByTechnicianId(Long technicianId, Pageable pageable);
+    Page<ServiceOrderResponseDTO> findByPeriod(LocalDate from, LocalDate to, ServiceOrderPeriodField field, Pageable pageable);
     ServiceOrderResponseDTO assignTechnician(Long id, Long technicianId);
     ServiceOrderResponseDTO resolveOrder(Long id, String solutionDetails, BigDecimal cost);
     ServiceOrderResponseDTO changeStatus(Long id, ServiceOrderStatusChangeRequestDTO dto);

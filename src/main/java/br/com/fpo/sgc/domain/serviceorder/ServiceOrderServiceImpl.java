@@ -28,10 +28,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 
 @Service
 @RequiredArgsConstructor
 public class ServiceOrderServiceImpl implements ServiceOrderService {
+
+    // Fuso da instituição (Crateús/CE), usado para interpretar as datas do filtro por período.
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("America/Fortaleza");
 
     private final ServiceOrderRepository serviceOrderRepository;
     private final UserRepository userRepository;
@@ -116,6 +121,26 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
     @Transactional(readOnly = true)
     public Page<ServiceOrderResponseDTO> findByTechnicianId(Long technicianId, Pageable pageable) {
         return serviceOrderRepository.findByTechnicianIdAndActiveTrue(technicianId, pageable).map(serviceOrderMapper::toDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ServiceOrderResponseDTO> findByPeriod(LocalDate from, LocalDate to, ServiceOrderPeriodField field, Pageable pageable) {
+        if (from == null && to == null) {
+            throw new BusinessException("Informe ao menos uma das datas do período (from ou to).");
+        }
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new BusinessException("A data inicial não pode ser posterior à data final.");
+        }
+
+        // Datas inclusivas no fuso local: [início de from, início do dia seguinte a to)
+        Instant fromInstant = from != null ? from.atStartOfDay(BUSINESS_ZONE).toInstant() : null;
+        Instant toInstant = to != null ? to.plusDays(1).atStartOfDay(BUSINESS_ZONE).toInstant() : null;
+
+        Page<ServiceOrder> page = field == ServiceOrderPeriodField.CLOSED
+                ? serviceOrderRepository.findByClosedBetween(fromInstant, toInstant, pageable)
+                : serviceOrderRepository.findByOpenedBetween(fromInstant, toInstant, pageable);
+        return page.map(serviceOrderMapper::toDTO);
     }
 
     @Override

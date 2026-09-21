@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Optional;
 
 @Repository
@@ -17,6 +18,14 @@ public interface ServiceOrderRepository extends JpaRepository<ServiceOrder, Long
     Page<ServiceOrder> findByRequesterIdAndActiveTrue(Long requesterId, Pageable pageable);
     Page<ServiceOrder> findByTechnicianIdAndActiveTrue(Long technicianId, Pageable pageable);
     Page<ServiceOrder> findByAssetIdAndActiveTrue(Long assetId, Pageable pageable);
+
+    @Query("SELECT so FROM ServiceOrder so WHERE so.active = true " +
+            "AND (:from IS NULL OR so.createdAt >= :from) AND (:to IS NULL OR so.createdAt < :to)")
+    Page<ServiceOrder> findByOpenedBetween(@Param("from") Instant from, @Param("to") Instant to, Pageable pageable);
+
+    @Query("SELECT so FROM ServiceOrder so WHERE so.active = true " +
+            "AND (:from IS NULL OR so.closedAt >= :from) AND (:to IS NULL OR so.closedAt < :to)")
+    Page<ServiceOrder> findByClosedBetween(@Param("from") Instant from, @Param("to") Instant to, Pageable pageable);
 
     // Carrega solicitante e técnico junto, para uso fora de transação (ex.: listener assíncrono de notificações).
     @Query("SELECT so FROM ServiceOrder so JOIN FETCH so.requester LEFT JOIN FETCH so.technician WHERE so.id = :id")

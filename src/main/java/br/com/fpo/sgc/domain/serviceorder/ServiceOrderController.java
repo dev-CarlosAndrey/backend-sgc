@@ -9,12 +9,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/v1/service-orders")
@@ -65,6 +67,16 @@ public class ServiceOrderController {
             @PathVariable Long technicianId,
             @PageableDefault(size = 10, sort = "createdAt") Pageable pageable) {
         return ResponseEntity.ok(serviceOrderService.findByTechnicianId(technicianId, pageable));
+    }
+
+    // Datas inclusivas (yyyy-MM-dd); field = OPENED (data de abertura, padrão) ou CLOSED (data de conclusão/cancelamento).
+    @GetMapping("/period")
+    public ResponseEntity<Page<ServiceOrderResponseDTO>> findByPeriod(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "OPENED") ServiceOrderPeriodField field,
+            @PageableDefault(size = 10, sort = "createdAt") Pageable pageable) {
+        return ResponseEntity.ok(serviceOrderService.findByPeriod(from, to, field, pageable));
     }
 
     @PreAuthorize("hasRole('ADMIN')")

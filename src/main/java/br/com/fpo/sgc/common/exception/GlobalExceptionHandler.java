@@ -6,6 +6,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.net.URI;
@@ -30,6 +31,17 @@ public class GlobalExceptionHandler {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
         problemDetail.setTitle("Violação de Regra de Negócio");
         problemDetail.setType(URI.create("https://sgc.fpo.edu.br/errors/business-error"));
+        problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
+    }
+
+    // Parâmetro de rota/query com valor de tipo incorreto (data mal formatada, enum inexistente...).
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ProblemDetail handleTypeMismatchException(MethodArgumentTypeMismatchException e) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+                "Valor inválido para o parâmetro '" + e.getName() + "'.");
+        problemDetail.setTitle("Parâmetro Inválido");
+        problemDetail.setType(URI.create("https://sgc.fpo.edu.br/errors/invalid-parameter"));
         problemDetail.setProperty("timestamp", Instant.now());
         return problemDetail;
     }
