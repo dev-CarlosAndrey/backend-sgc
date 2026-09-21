@@ -48,6 +48,27 @@ public class AssetController {
         return ResponseEntity.ok(assetService.findBySectorId(sectorId, pageable));
     }
 
+    @GetMapping("/status/{status}")
+    public ResponseEntity<Page<AssetResponseDTO>> findByStatus(
+            @PathVariable AssetStatus status,
+            @PageableDefault(size = 10, sort = "name") Pageable pageable) {
+        return ResponseEntity.ok(assetService.findByStatus(status, pageable));
+    }
+
+    @GetMapping("/category/{categoryId}")
+    public ResponseEntity<Page<AssetResponseDTO>> findByCategoryId(
+            @PathVariable Long categoryId,
+            @PageableDefault(size = 10, sort = "name") Pageable pageable) {
+        return ResponseEntity.ok(assetService.findByCategoryId(categoryId, pageable));
+    }
+
+    @GetMapping("/responsible/{responsibleId}")
+    public ResponseEntity<Page<AssetResponseDTO>> findByResponsibleId(
+            @PathVariable Long responsibleId,
+            @PageableDefault(size = 10, sort = "name") Pageable pageable) {
+        return ResponseEntity.ok(assetService.findByResponsibleId(responsibleId, pageable));
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<AssetResponseDTO> update(
             @PathVariable Long id,

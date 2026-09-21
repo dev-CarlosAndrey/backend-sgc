@@ -94,6 +94,24 @@ public class AssetServiceImpl implements AssetService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Page<AssetResponseDTO> findByStatus(AssetStatus status, Pageable pageable) {
+        return assetRepository.findByStatusAndActiveTrue(status, pageable).map(assetMapper::toDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<AssetResponseDTO> findByCategoryId(Long categoryId, Pageable pageable) {
+        return assetRepository.findByCategoryIdAndActiveTrue(categoryId, pageable).map(assetMapper::toDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<AssetResponseDTO> findByResponsibleId(Long responsibleId, Pageable pageable) {
+        return assetRepository.findByResponsibleIdAndActiveTrue(responsibleId, pageable).map(assetMapper::toDTO);
+    }
+
+    @Override
     @Transactional
     public AssetResponseDTO update(Long id, AssetRequestDTO dto) {
         Asset asset = assetRepository.findById(id)

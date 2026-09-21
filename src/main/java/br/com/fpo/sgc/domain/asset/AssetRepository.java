@@ -17,6 +17,8 @@ public interface AssetRepository extends JpaRepository<Asset, Long> {
     Page<Asset> findByActiveTrue(Pageable pageable);
     Page<Asset> findBySectorIdAndActiveTrue(Long sectorId, Pageable pageable);
     Page<Asset> findByStatusAndActiveTrue(AssetStatus status, Pageable pageable);
+    Page<Asset> findByCategoryIdAndActiveTrue(Long categoryId, Pageable pageable);
+    Page<Asset> findByResponsibleIdAndActiveTrue(Long responsibleId, Pageable pageable);
     @Query("SELECT COUNT(a) FROM Asset a " +
             "WHERE a.active = true " +
             "AND (:companyId IS NULL OR a.sector.building.company.id = :companyId)")

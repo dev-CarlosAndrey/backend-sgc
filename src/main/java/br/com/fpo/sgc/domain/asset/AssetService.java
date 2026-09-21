@@ -12,6 +12,9 @@ public interface AssetService {
     AssetResponseDTO findByTagNumber(String tagNumber);
     Page<AssetResponseDTO> findAll(Pageable pageable);
     Page<AssetResponseDTO> findBySectorId(Long sectorId, Pageable pageable);
+    Page<AssetResponseDTO> findByStatus(AssetStatus status, Pageable pageable);
+    Page<AssetResponseDTO> findByCategoryId(Long categoryId, Pageable pageable);
+    Page<AssetResponseDTO> findByResponsibleId(Long responsibleId, Pageable pageable);
     AssetResponseDTO update(Long id, AssetRequestDTO dto);
     void delete(Long id);
     AssetResponseDTO uploadPhoto(Long id, MultipartFile file);
