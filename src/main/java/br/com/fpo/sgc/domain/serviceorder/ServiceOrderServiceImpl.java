@@ -190,7 +190,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
 
         ServiceOrder resolvedSo = serviceOrderRepository.save(so);
         logStatusChange(resolvedSo, previousStatus, ServiceOrderStatus.RESOLVED, solutionDetails);
-        publishEvent(resolvedSo, ServiceOrderEventType.RESOLVED);
+        publishEvent(resolvedSo, ServiceOrderEventType.RESOLVED, currentUserId());
 
         // Registrar auditoria
         String performedBy = (resolvedSo.getTechnician() != null) ? resolvedSo.getTechnician().getEmail() : "SYSTEM";
@@ -267,7 +267,17 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
 
     // Consumido após o commit (ex.: notificações); se a transação sofrer rollback, o evento é descartado.
     private void publishEvent(ServiceOrder so, ServiceOrderEventType type) {
-        eventPublisher.publishEvent(new ServiceOrderEvent(so.getId(), type, so.getStatus()));
+        publishEvent(so, type, null);
+    }
+
+    private void publishEvent(ServiceOrder so, ServiceOrderEventType type, Long actorUserId) {
+        eventPublisher.publishEvent(new ServiceOrderEvent(so.getId(), type, so.getStatus(), actorUserId));
+    }
+
+    // Id do usuário autenticado (o login é o name do usuário); nulo se não houver usuário logado.
+    private Long currentUserId() {
+        String username = currentUser();
+        return userRepository.findByNameAndActiveTrue(username).map(User::getId).orElse(null);
     }
 
     private void logStatusChange(ServiceOrder so, ServiceOrderStatus previous, ServiceOrderStatus next, String note) {

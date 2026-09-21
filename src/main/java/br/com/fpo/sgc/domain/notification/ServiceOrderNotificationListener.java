@@ -4,6 +4,7 @@ import br.com.fpo.sgc.domain.serviceorder.ServiceOrder;
 import br.com.fpo.sgc.domain.serviceorder.ServiceOrderEvent;
 import br.com.fpo.sgc.domain.serviceorder.ServiceOrderRepository;
 import br.com.fpo.sgc.domain.user.User;
+import br.com.fpo.sgc.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -24,6 +25,7 @@ import java.util.Set;
 public class ServiceOrderNotificationListener {
 
     private final ServiceOrderRepository serviceOrderRepository;
+    private final UserRepository userRepository;
     private final NotificationService notificationService;
 
     @Async
@@ -38,7 +40,7 @@ public class ServiceOrderNotificationListener {
 
             String subject = "OS #" + so.getId() + " - " + so.getTitle();
             String message = buildMessage(so, event);
-            for (User recipient : recipients(so)) {
+            for (User recipient : recipients(so, event)) {
                 notificationService.notifyUser(so, recipient, subject, message, event.status());
             }
         } catch (Exception e) {
@@ -46,10 +48,13 @@ public class ServiceOrderNotificationListener {
         }
     }
 
-    // Solicitante e técnico (quando houver), sem duplicar e ignorando usuários inativos.
-    private Set<User> recipients(ServiceOrder so) {
+    // Solicitante, técnico atribuído e, se houver, quem executou a ação (ex.: quem resolveu a OS) — sem
+    // duplicar e ignorando usuários inativos.
+    private Set<User> recipients(ServiceOrder so, ServiceOrderEvent event) {
+        User actor = event.actorUserId() != null ? userRepository.findById(event.actorUserId()).orElse(null) : null;
+
         Set<User> recipients = new LinkedHashSet<>();
-        for (User user : new User[]{so.getRequester(), so.getTechnician()}) {
+        for (User user : new User[]{so.getRequester(), so.getTechnician(), actor}) {
             if (user != null && Boolean.TRUE.equals(user.getActive())) {
                 recipients.add(user);
             }

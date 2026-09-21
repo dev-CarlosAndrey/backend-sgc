@@ -562,7 +562,7 @@ Regras (violação → **400**): `IN_PROGRESS` exige técnico já atribuído; `C
 ```
 `previousStatus` é `null` no registro de abertura. OS criadas antes de 2026-09-21 não têm histórico retroativo.
 
-**Notificações:** criar, atribuir técnico, alterar status e resolver disparam notificação **por e-mail** ao solicitante e ao técnico (o WhatsApp ainda não existe; e o envio só ocorre se o backend estiver com `SENDGRID_API_KEY` configurada e o usuário tiver e-mail). É assíncrono e não interfere na resposta da API; não há endpoint para consultar notificações.
+**Notificações:** criar, atribuir técnico, alterar status e resolver disparam notificação **por e-mail** ao solicitante e ao técnico atribuído (na resolução, também a quem resolveu a OS, mesmo que não seja o técnico atribuído) (o WhatsApp ainda não existe; e o envio só ocorre se o backend estiver com `SENDGRID_API_KEY` configurada e o usuário tiver e-mail). É assíncrono e não interfere na resposta da API; não há endpoint para consultar notificações.
 
 ### 6.11 Marcas — `/api/v1/brands`
 

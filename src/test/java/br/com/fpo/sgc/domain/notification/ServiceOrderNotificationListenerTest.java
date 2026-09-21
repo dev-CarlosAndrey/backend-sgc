@@ -2,6 +2,7 @@ package br.com.fpo.sgc.domain.notification;
 
 import br.com.fpo.sgc.domain.serviceorder.*;
 import br.com.fpo.sgc.domain.user.User;
+import br.com.fpo.sgc.domain.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -17,6 +18,7 @@ class ServiceOrderNotificationListenerTest {
 
     private ServiceOrderRepository repository;
     private NotificationService notificationService;
+    private UserRepository userRepository;
     private ServiceOrderNotificationListener listener;
     private User requester;
     private User technician;
@@ -25,7 +27,8 @@ class ServiceOrderNotificationListenerTest {
     void setUp() {
         repository = mock(ServiceOrderRepository.class);
         notificationService = mock(NotificationService.class);
-        listener = new ServiceOrderNotificationListener(repository, notificationService);
+        userRepository = mock(UserRepository.class);
+        listener = new ServiceOrderNotificationListener(repository, userRepository, notificationService);
         requester = User.builder().id(1L).name("Prof").build();
         technician = User.builder().id(2L).name("Téc").build();
     }
@@ -94,5 +97,49 @@ class ServiceOrderNotificationListenerTest {
         listener.onServiceOrderEvent(new ServiceOrderEvent(99L, ServiceOrderEventType.CREATED, ServiceOrderStatus.OPEN));
 
         verifyNoInteractions(notificationService);
+    }
+
+    @Test
+    void quemResolveu_tambemRecebe_mesmoSendoDiferenteDoTecnicoAtribuido() {
+        order(technician);
+        User resolver = User.builder().id(3L).name("Admin").build();
+        when(userRepository.findById(3L)).thenReturn(Optional.of(resolver));
+
+        listener.onServiceOrderEvent(new ServiceOrderEvent(10L, ServiceOrderEventType.RESOLVED, ServiceOrderStatus.RESOLVED, 3L));
+
+        verify(notificationService, times(3)).notifyUser(any(), any(), any(), any(), any());
+        verify(notificationService).notifyUser(any(), eq(resolver), any(), any(), eq(ServiceOrderStatus.RESOLVED));
+    }
+
+    @Test
+    void osSemTecnico_quemResolveuRecebeJuntoComOSolicitante() {
+        order(null);
+        User resolver = User.builder().id(3L).name("Téc").build();
+        when(userRepository.findById(3L)).thenReturn(Optional.of(resolver));
+
+        listener.onServiceOrderEvent(new ServiceOrderEvent(10L, ServiceOrderEventType.RESOLVED, ServiceOrderStatus.RESOLVED, 3L));
+
+        verify(notificationService, times(2)).notifyUser(any(), any(), any(), any(), any());
+        verify(notificationService).notifyUser(any(), eq(requester), any(), any(), any());
+        verify(notificationService).notifyUser(any(), eq(resolver), any(), any(), any());
+    }
+
+    @Test
+    void quemResolveuIgualAoTecnico_naoDuplica() {
+        order(technician);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(technician));
+
+        listener.onServiceOrderEvent(new ServiceOrderEvent(10L, ServiceOrderEventType.RESOLVED, ServiceOrderStatus.RESOLVED, 2L));
+
+        verify(notificationService, times(2)).notifyUser(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void eventoSemAtor_naoConsultaUsuarios() {
+        order(technician);
+
+        listener.onServiceOrderEvent(new ServiceOrderEvent(10L, ServiceOrderEventType.CREATED, ServiceOrderStatus.OPEN));
+
+        verifyNoInteractions(userRepository);
     }
 }
