@@ -121,7 +121,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public User findOrCreateByPhone(String phone, String displayName) {
         return userRepository.findByPhone(phone).orElseGet(() -> {
-            String name = (displayName != null && !displayName.isBlank()) ? displayName : "Contato WhatsApp " + phone;
+            String name = resolveUniqueName(displayName, phone);
             // E-mail e senha não têm uso real aqui (ninguém loga no painel com esta conta); só preenchem as
             // colunas NOT NULL/UNIQUE da tabela. O e-mail é determinístico a partir do telefone (que já é
             // único por construção, por vir de findByPhone) para nunca colidir com um e-mail real.
@@ -146,5 +146,21 @@ public class UserServiceImpl implements UserService {
 
             return savedUser;
         });
+    }
+
+    // O login busca por name (RF01, campo "name" é o username) esperando um único usuário ativo por nome
+    // (UserDetailsServiceCustom/AuthController usam findByNameAndActiveTrue, que lança
+    // NonUniqueResultException se houver mais de um). "name" não tem UNIQUE no banco, então nada impede
+    // duas pessoas reais de serem cadastradas com o mesmo nome — mas aqui, na criação automática via
+    // WhatsApp, o nome vem sem curadoria nenhuma (é o nome de exibição do contato no WhatsApp da pessoa),
+    // então o risco de colidir com um usuário já cadastrado é real (ex.: duas pessoas chamadas "Andrey").
+    // Por isso, diferente do cadastro manual (create()), aqui sempre conferimos antes de usar o nome puro.
+    private String resolveUniqueName(String displayName, String phone) {
+        String base = (displayName != null && !displayName.isBlank()) ? displayName.trim() : null;
+        if (base == null) {
+            return "Contato WhatsApp " + phone;
+        }
+        boolean collidesWithExistingLogin = userRepository.findByNameAndActiveTrue(base).isPresent();
+        return collidesWithExistingLogin ? base + " (WhatsApp " + phone + ")" : base;
     }
 }

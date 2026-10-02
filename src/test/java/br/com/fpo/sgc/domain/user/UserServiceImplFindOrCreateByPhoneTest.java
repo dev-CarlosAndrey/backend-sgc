@@ -26,6 +26,7 @@ class UserServiceImplFindOrCreateByPhoneTest {
         passwordEncoder = mock(PasswordEncoder.class);
         service = new UserServiceImpl(userRepository, passwordEncoder, mock(AuditLogService.class), null);
         when(passwordEncoder.encode(any())).thenReturn("hash");
+        when(userRepository.findByNameAndActiveTrue(any())).thenReturn(Optional.empty());
     }
 
     @Test
@@ -64,6 +65,24 @@ class UserServiceImplFindOrCreateByPhoneTest {
 
         User result = service.findOrCreateByPhone("558899999999", null);
 
+        assertTrue(result.getName().contains("558899999999"));
+    }
+
+    // Bug real: o nome de exibição do contato no WhatsApp não tem curadoria nenhuma, então pode colidir
+    // com o "name" (campo de login, RF01) de um usuário já cadastrado — ex.: duas pessoas chamadas "Andrey".
+    // O login (findByNameAndActiveTrue) espera resultado único; sem essa desambiguação, criar o segundo
+    // "Andrey" quebra o login do primeiro com NonUniqueResultException.
+    @Test
+    void nomeDoContatoColideComUsuarioAtivoExistente_desambiguaComOTelefone() {
+        when(userRepository.findByPhone("558899999999")).thenReturn(Optional.empty());
+        when(userRepository.findByNameAndActiveTrue("Andrey"))
+                .thenReturn(Optional.of(User.builder().id(2L).name("Andrey").build()));
+        when(userRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        User result = service.findOrCreateByPhone("558899999999", "Andrey");
+
+        assertNotEquals("Andrey", result.getName());
+        assertTrue(result.getName().contains("Andrey"));
         assertTrue(result.getName().contains("558899999999"));
     }
 }
