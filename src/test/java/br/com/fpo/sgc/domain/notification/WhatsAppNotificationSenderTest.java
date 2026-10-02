@@ -56,6 +56,19 @@ class WhatsAppNotificationSenderTest {
     }
 
     @Test
+    void sendText_enviaTextoCruParaOTelefoneInformado() {
+        server.expect(requestTo("https://graph.facebook.com/v22.0/" + PHONE_NUMBER_ID + "/messages"))
+                .andExpect(method(POST))
+                .andExpect(jsonPath("$.to").value("558899999999"))
+                .andExpect(jsonPath("$.text.body").value("Olá!"))
+                .andRespond(withStatus(OK));
+
+        sender.sendText("558899999999", "Olá!");
+
+        server.verify();
+    }
+
+    @Test
     void canSend_exigeConfiguracaoETelefoneDoDestinatario() {
         assertTrue(sender.canSend(user));
         assertFalse(sender.canSend(User.builder().name("Sem telefone").build()));

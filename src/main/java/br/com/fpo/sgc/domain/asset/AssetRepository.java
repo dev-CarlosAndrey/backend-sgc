@@ -16,6 +16,8 @@ import java.util.Optional;
 public interface AssetRepository extends JpaRepository<Asset, Long> {
     boolean existsByTagNumber(String tagNumber);
     Optional<Asset> findByTagNumber(String tagNumber);
+    // Usado pela abertura de OS via WhatsApp (RF15): o tombamento vem em texto livre do usuário.
+    Optional<Asset> findByTagNumberIgnoreCaseAndActiveTrue(String tagNumber);
     Page<Asset> findByActiveTrue(Pageable pageable);
     Page<Asset> findBySectorIdAndActiveTrue(Long sectorId, Pageable pageable);
     Page<Asset> findByStatusAndActiveTrue(AssetStatus status, Pageable pageable);

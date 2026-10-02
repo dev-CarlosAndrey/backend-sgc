@@ -13,6 +13,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
@@ -113,5 +115,36 @@ public class UserServiceImpl implements UserService {
                 user.getEmail(),
                 "Usuário " + user.getName() + " inativado no sistema"
         );
+    }
+
+    @Override
+    @Transactional
+    public User findOrCreateByPhone(String phone, String displayName) {
+        return userRepository.findByPhone(phone).orElseGet(() -> {
+            String name = (displayName != null && !displayName.isBlank()) ? displayName : "Contato WhatsApp " + phone;
+            // E-mail e senha não têm uso real aqui (ninguém loga no painel com esta conta); só preenchem as
+            // colunas NOT NULL/UNIQUE da tabela. O e-mail é determinístico a partir do telefone (que já é
+            // único por construção, por vir de findByPhone) para nunca colidir com um e-mail real.
+            User user = User.builder()
+                    .name(name)
+                    .email("whatsapp+" + phone + "@sgc.local")
+                    .password(passwordEncoder.encode(UUID.randomUUID().toString()))
+                    .phone(phone)
+                    .role(Role.USER)
+                    .active(true)
+                    .build();
+
+            User savedUser = userRepository.save(user);
+
+            auditLogService.log(
+                    "User",
+                    savedUser.getId(),
+                    "CREATE",
+                    "WHATSAPP",
+                    "Usuário " + savedUser.getName() + " criado automaticamente ao abrir chamado pelo WhatsApp (telefone " + phone + ")"
+            );
+
+            return savedUser;
+        });
     }
 }

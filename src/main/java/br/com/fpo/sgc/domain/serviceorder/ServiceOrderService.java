@@ -12,6 +12,9 @@ import java.time.LocalDate;
 
 public interface ServiceOrderService {
     ServiceOrderResponseDTO create(ServiceOrderRequestDTO dto);
+    // Usado pela abertura de OS via WhatsApp (RF15) para marcar channel = WHATSAPP; create(dto) acima
+    // continua fixando PANEL, usado pelo painel administrativo.
+    ServiceOrderResponseDTO create(ServiceOrderRequestDTO dto, ServiceOrderChannel channel);
     ServiceOrderResponseDTO findById(Long id);
     Page<ServiceOrderResponseDTO> findAll(Pageable pageable);
     Page<ServiceOrderResponseDTO> findByStatus(ServiceOrderStatus status, Pageable pageable);

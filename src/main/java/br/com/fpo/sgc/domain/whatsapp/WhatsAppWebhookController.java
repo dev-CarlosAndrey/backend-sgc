@@ -1,5 +1,8 @@
 package br.com.fpo.sgc.domain.whatsapp;
 
+import br.com.fpo.sgc.domain.whatsapp.dto.WhatsAppWebhookPayload;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -12,26 +15,39 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /**
  * Webhook do WhatsApp Cloud API (Meta): verificação de assinatura (GET, desafio de configuração) e
  * recebimento de eventos de mensagem (POST). RF14. Liberado no SecurityConfig (a Meta não envia JWT).
  *
- * O processamento do conteúdo das mensagens (abertura/consulta de chamado via chatbot) é o RF15/RF16,
- * ainda não implementado: por ora este endpoint apenas valida a origem da chamada e confirma o recebimento,
- * respondendo rápido como exige a integração (o processamento assíncrono virá junto do RF15).
+ * Toda mensagem de texto recebida é repassada a {@link WhatsAppAutoReplyService} (RF15/RF16): se estiver no
+ * formato de abertura de OS, o chamado é criado e a pessoa recebe a confirmação (ou o erro, se o setor/bem
+ * não existir); se for um comando "Status", recebe o status do(s) chamado(s) associado(s) ao telefone;
+ * caso contrário, recebe a mensagem de boas-vindas com os formatos esperados. Este endpoint só valida a
+ * origem da chamada, faz o parsing do payload, loga mensagens recebidas e atualizações de status de
+ * entrega, e responde rápido como exige a integração — o processamento da mensagem é assíncrono para não
+ * atrasar essa resposta.
  */
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/whatsapp/webhook")
 public class WhatsAppWebhookController {
 
+    // spring-boot-starter-webmvc, ao contrário do antigo starter-web, não expõe um bean ObjectMapper
+    // pronto para injeção; instanciamos um próprio, igual aos testes deste controller.
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     private final WhatsAppSignatureVerifier signatureVerifier;
+    private final WhatsAppAutoReplyService autoReplyService;
     private final String verifyToken;
 
     public WhatsAppWebhookController(
             WhatsAppSignatureVerifier signatureVerifier,
+            WhatsAppAutoReplyService autoReplyService,
             @Value("${whatsapp.cloud-api.webhook-verify-token:}") String verifyToken) {
         this.signatureVerifier = signatureVerifier;
+        this.autoReplyService = autoReplyService;
         this.verifyToken = verifyToken;
     }
 
@@ -57,7 +73,51 @@ public class WhatsAppWebhookController {
             log.warn("Assinatura inválida em evento recebido no webhook do WhatsApp");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        log.info("Evento recebido no webhook do WhatsApp ({} bytes)", rawBody.length());
+        logPayload(rawBody);
         return ResponseEntity.ok().build();
+    }
+
+    // A Meta já validou a assinatura acima; um payload malformado aqui não é motivo para reprocessar
+    // (não é isso que corrigiria), então só logamos e ainda assim confirmamos o recebimento.
+    private void logPayload(String rawBody) {
+        WhatsAppWebhookPayload payload;
+        try {
+            payload = objectMapper.readValue(rawBody, WhatsAppWebhookPayload.class);
+        } catch (JsonProcessingException e) {
+            log.warn("Payload do webhook do WhatsApp não pôde ser interpretado: {}", e.getMessage());
+            return;
+        }
+
+        for (WhatsAppWebhookPayload.Entry entry : orEmpty(payload.entry())) {
+            for (WhatsAppWebhookPayload.Change change : orEmpty(entry.changes())) {
+                WhatsAppWebhookPayload.Value value = change.value();
+                if (value == null) {
+                    continue;
+                }
+                for (WhatsAppWebhookPayload.IncomingMessage message : orEmpty(value.messages())) {
+                    String body = message.text() != null ? message.text().body() : null;
+                    log.info("Mensagem recebida no WhatsApp de {} ({}): {}", message.from(), message.type(), body);
+                    autoReplyService.handleIncomingMessage(message.from(), displayNameOf(message.from(), value.contacts()), body);
+                }
+                for (WhatsAppWebhookPayload.MessageStatus status : orEmpty(value.statuses())) {
+                    log.info("Atualização de status no WhatsApp: mensagem {} -> {} (destinatário {})",
+                            status.id(), status.status(), status.recipientId());
+                }
+            }
+        }
+    }
+
+    // A Meta manda o nome de exibição do contato em "contacts", casado pelo wa_id = telefone de quem mandou.
+    private String displayNameOf(String fromPhone, List<WhatsAppWebhookPayload.Contact> contacts) {
+        return orEmpty(contacts).stream()
+                .filter(contact -> fromPhone.equals(contact.waId()))
+                .map(contact -> contact.profile() != null ? contact.profile().name() : null)
+                .filter(name -> name != null && !name.isBlank())
+                .findFirst()
+                .orElse(null);
+    }
+
+    private <T> List<T> orEmpty(List<T> list) {
+        return list != null ? list : List.of();
     }
 }

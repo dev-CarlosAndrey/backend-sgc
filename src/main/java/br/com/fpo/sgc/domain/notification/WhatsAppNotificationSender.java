@@ -60,15 +60,21 @@ public class WhatsAppNotificationSender implements NotificationSender {
     public void send(User recipient, String subject, String message, ServiceOrderStatus status) {
         String to = recipient.getPhone().replaceAll("\\D", "");
         String text = subject == null || subject.isBlank() ? message : subject + "\n\n" + message;
+        sendText(to, text);
+    }
 
+    // Reaproveitado pelo WhatsAppAutoReplyService (RF14): o destinatário de uma resposta automática no
+    // webhook não é necessariamente um User cadastrado, então o envio cru por telefone fica público aqui.
+    public void sendText(String toPhoneDigitsOnly, String text) {
         Map<String, Object> body = Map.of(
                 "messaging_product", "whatsapp",
-                "to", to,
+                "to", toPhoneDigitsOnly,
                 "type", "text",
                 "text", Map.of("body", text));
 
         // 200 em caso de sucesso; 4xx/5xx (token expirado, número restrito, limite excedido...) viram
-        // RestClientResponseException, tratada pelo NotificationService (retentativa e fallback por e-mail).
+        // RestClientResponseException, tratada pelo NotificationService (retentativa e fallback por e-mail)
+        // ou pelo WhatsAppAutoReplyService (que só loga, pois não há fallback para uma resposta automática).
         restClient.post()
                 .uri("/{phoneNumberId}/messages", phoneNumberId)
                 .header("Authorization", "Bearer " + accessToken)
@@ -79,7 +85,7 @@ public class WhatsAppNotificationSender implements NotificationSender {
     }
 
     // Ignora vazio e o placeholder de exemplo do application.yml.
-    private boolean isConfigured() {
+    public boolean isConfigured() {
         return accessToken != null && !accessToken.isBlank() && !accessToken.equals("defina_no_ambiente")
                 && phoneNumberId != null && !phoneNumberId.isBlank() && !phoneNumberId.equals("defina_no_ambiente");
     }

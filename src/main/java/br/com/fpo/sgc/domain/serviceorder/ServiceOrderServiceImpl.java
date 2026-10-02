@@ -47,6 +47,15 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
     @Override
     @Transactional
     public ServiceOrderResponseDTO create(ServiceOrderRequestDTO dto) {
+        // @Transactional aqui também (e não só no overload abaixo) porque esta chamada a create(dto, channel)
+        // é auto-invocação (mesmo bean): sem isso, o proxy do Spring não entraria em ação e a transação não
+        // seria aberta. Como os dois usam propagação REQUIRED (padrão), abrir aqui já cobre o método interno.
+        return create(dto, ServiceOrderChannel.PANEL);
+    }
+
+    @Override
+    @Transactional
+    public ServiceOrderResponseDTO create(ServiceOrderRequestDTO dto, ServiceOrderChannel channel) {
         User requester = userRepository.findById(dto.requesterId())
                 .orElseThrow(() -> new EntityNotFoundException("Solicitante não encontrado com ID: " + dto.requesterId()));
 
@@ -64,7 +73,7 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
 
         ServiceOrder so = serviceOrderMapper.toEntity(dto, requester, sector, asset);
         so.setStatus(ServiceOrderStatus.OPEN);
-        so.setChannel(ServiceOrderChannel.PANEL);
+        so.setChannel(channel);
 
         ServiceOrder savedSo = serviceOrderRepository.save(so);
         logStatusChange(savedSo, null, ServiceOrderStatus.OPEN, "Ordem de serviço aberta");
