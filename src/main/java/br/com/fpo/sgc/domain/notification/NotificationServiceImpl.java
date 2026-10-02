@@ -6,6 +6,7 @@ import br.com.fpo.sgc.domain.user.User;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.util.EnumMap;
 import java.util.List;
@@ -69,14 +70,25 @@ public class NotificationServiceImpl implements NotificationService {
                 record(serviceOrder, recipient, channel, NotificationStatus.SENT, attempt, null);
                 return true;
             } catch (Exception e) {
-                log.warn("Falha ao notificar via {} (tentativa {}/{}): {}", channel, attempt, maxAttempts, e.getMessage());
-                record(serviceOrder, recipient, channel, NotificationStatus.FAILED, attempt, e.getMessage());
+                String detail = errorDetail(e);
+                log.warn("Falha ao notificar via {} (tentativa {}/{}): {}", channel, attempt, maxAttempts, detail);
+                record(serviceOrder, recipient, channel, NotificationStatus.FAILED, attempt, detail);
                 if (attempt < maxAttempts && !waitBeforeRetry(attempt)) {
                     return false;
                 }
             }
         }
         return false;
+    }
+
+    // Erros HTTP (token expirado, número restrito, limite de mensagens...) trazem o corpo de erro da API
+    // (Graph API ou SendGrid) na resposta; usar isso em vez da mensagem genérica da exceção.
+    private String errorDetail(Exception e) {
+        if (e instanceof RestClientResponseException responseException) {
+            String body = responseException.getResponseBodyAsString();
+            return body != null && !body.isBlank() ? body : e.getMessage();
+        }
+        return e.getMessage();
     }
 
     private boolean waitBeforeRetry(int attempt) {

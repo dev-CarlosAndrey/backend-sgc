@@ -46,8 +46,7 @@ notification:
   max-attempts: ${NOTIFICATION_MAX_ATTEMPTS:3}
   retry-backoff-ms: ${NOTIFICATION_RETRY_BACKOFF_MS:1000}
 
-# Configuração da integração com o WhatsApp Cloud API (Meta) — substitui a Evolution API
-# (decisão registrada em PLANO_IMPLEMENTACAO_MVP.md, seção 0.2; em teste, ainda não consumida por nenhum bean)
+# Configuração da integração com o WhatsApp Cloud API (Meta) — substitui a Evolution API (ver PLANO_IMPLEMENTACAO_MVP.md, seção 0.2)
 whatsapp:
   cloud-api:
     base-url: ${WHATSAPP_CLOUD_API_BASE_URL:https://graph.facebook.com/v22.0}

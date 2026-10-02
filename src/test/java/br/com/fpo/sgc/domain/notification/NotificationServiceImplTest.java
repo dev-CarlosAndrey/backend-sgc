@@ -6,7 +6,11 @@ import br.com.fpo.sgc.domain.user.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.RestClientResponseException;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -84,6 +88,20 @@ class NotificationServiceImplTest {
         assertEquals(NotificationStatus.FAILED, records.get(0).getDeliveryStatus());
         assertEquals(NotificationStatus.SENT, records.get(1).getDeliveryStatus());
         assertEquals(2, records.get(1).getAttempt());
+    }
+
+    @Test
+    void falhaHttp_registraCorpoDaRespostaDeErroEmVezDaMensagemGenerica() {
+        String corpoDeErro = "{\"error\":{\"message\":\"Access token has expired\",\"code\":190}}";
+        RestClientResponseException exception = new RestClientResponseException(
+                "401 Unauthorized", HttpStatus.UNAUTHORIZED.value(), "Unauthorized",
+                new HttpHeaders(), corpoDeErro.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8);
+        doThrow(exception).when(whatsapp).send(any(), any(), any(), any());
+
+        assertTrue(service(true, whatsapp, email).notifyUser(order, user, "s", "m", ServiceOrderStatus.OPEN));
+
+        List<Notification> records = saved(4);
+        assertEquals(corpoDeErro, records.get(0).getErrorMessage());
     }
 
     @Test
