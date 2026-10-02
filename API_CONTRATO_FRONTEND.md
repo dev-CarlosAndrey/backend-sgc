@@ -1,6 +1,6 @@
 # Contrato da API — SGC API (para consumo pelo frontend)
 
-> Atualizado em 2026-09-21, a partir do código-fonte real de `src/main/java/br/com/fpo/sgc` e das migrations `V1–V19`, e conferido contra respostas reais da API rodando (formato de paginação, filtros, CSV, RBAC, CORS). Descreve o que existe e funciona hoje no backend — sem especulação sobre funcionalidades futuras. Cobre o núcleo administrativo (Fase 1), as notificações por e-mail e os relatórios (RF19/RF20). Ver `PLANO_IMPLEMENTACAO_MVP.md` neste repositório para o roadmap completo e o que ainda **não** foi implementado (WhatsApp).
+> Atualizado em 2026-10-02, a partir do código-fonte real de `src/main/java/br/com/fpo/sgc` e das migrations `V1–V19`, e conferido contra respostas reais da API rodando (formato de paginação, filtros, CSV, RBAC, CORS). Descreve o que existe e funciona hoje no backend — sem especulação sobre funcionalidades futuras. Cobre o núcleo administrativo (Fase 1), as notificações por e-mail **e por WhatsApp** e os relatórios (RF19/RF20). Desde 2026-10-02, OS também podem nascer de uma mensagem de WhatsApp e ser consultadas por lá (RF15/RF16, ver 6.10/6.17) — o frontend vai ver essas OS misturadas nas mesmas listagens, com `channel: "WHATSAPP"`. Os quatro requisitos funcionais do WhatsApp (RF14–RF17) estão concluídos; não há endpoint novo que o frontend precise chamar por causa disso — é tudo mensagem de WhatsApp. Ver `PLANO_IMPLEMENTACAO_MVP.md` para o roadmap completo.
 
 ## 1. Visão geral
 
@@ -138,6 +138,7 @@ Política implementada (`@PreAuthorize` a nível de método, habilitado via `@En
 | Ordem de Serviço — consultas (por status/solicitante/técnico/bem/período/id/lista) e histórico de status | Qualquer autenticado | — |
 | Dashboard e Relatórios (`/reports/**`) | **ADMIN** apenas | — |
 | Log de auditoria | Qualquer autenticado (sem restrição adicional) | — (somente leitura) |
+| Webhook do WhatsApp (`/whatsapp/webhook`) | **Público** (sem JWT — a Meta não envia token; ver seção 6.17) | **Público**, mas validado por assinatura HMAC própria |
 
 Uma chamada fora do papel permitido retorna **403 Forbidden** sem corpo `ProblemDetail` (resposta padrão do Spring Security). O frontend deve tratar 403 genericamente como "sem permissão" nesses casos, e esconder/desabilitar ações de escrita nos módulos administrativos para usuários `TECHNICIAN`/`USER`.
 
@@ -150,7 +151,7 @@ Uma chamada fora do papel permitido retorna **403 Forbidden** sem corpo `Problem
 | `AssetConservationState` | `NEW`, `GOOD`, `REGULAR`, `BAD`, `UNSERVICEABLE` |
 | `ServiceOrderStatus` | `OPEN`, `IN_PROGRESS`, `RESOLVED`, `CANCELLED` (`CANCELLED` é produzido por `PATCH /service-orders/{id}/status`; `RESOLVED` só por `PATCH /service-orders/{id}/resolve` — ver 6.10) |
 | `ServiceOrderPriority` | `LOW`, `MEDIUM`, `HIGH`, `URGENT` |
-| `ServiceOrderChannel` | `PANEL`, `WHATSAPP` (⚠️ hoje toda OS criada via API vem sempre como `PANEL` — o canal `WHATSAPP` está reservado para quando a Fase 2 for implementada, mas ainda não existe nenhum fluxo que o produza) |
+| `ServiceOrderChannel` | `PANEL` (OS aberta via `POST /service-orders`) ou `WHATSAPP` (OS aberta por mensagem recebida no webhook, RF15, desde 2026-10-02) |
 
 ## 6. Endpoints por módulo
 
@@ -562,7 +563,9 @@ Regras (violação → **400**): `IN_PROGRESS` exige técnico já atribuído; `C
 ```
 `previousStatus` é `null` no registro de abertura. OS criadas antes de 2026-09-21 não têm histórico retroativo.
 
-**Notificações:** criar, atribuir técnico, alterar status e resolver disparam notificação **por e-mail** ao solicitante e ao técnico atribuído (na resolução, também a quem resolveu a OS, mesmo que não seja o técnico atribuído) (o WhatsApp ainda não existe; e o envio só ocorre se o backend estiver com `SENDGRID_API_KEY` configurada e o usuário tiver e-mail). É assíncrono e não interfere na resposta da API; não há endpoint para consultar notificações.
+**Notificações:** criar, atribuir técnico, alterar status e resolver disparam notificação ao solicitante e ao técnico atribuído (na resolução, também a quem resolveu a OS, mesmo que não seja o técnico atribuído). O backend tenta **WhatsApp primeiro** (se `WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID` estiverem configurados e o usuário tiver telefone) e cai automaticamente para **e-mail** via SendGrid em caso de falha (se `SENDGRID_API_KEY` estiver configurada e o usuário tiver e-mail). Mensagem de WhatsApp é texto livre, então só é entregue dentro da janela de atendimento de 24h da Cloud API — quem abriu a OS pelo próprio WhatsApp (ver 6.17) está dentro dessa janela; quem nunca escreveu para o número (ex.: um técnico atribuído) tende a cair no fallback de e-mail. É assíncrono e não interfere na resposta da API; não há endpoint para consultar notificações.
+
+**OS abertas via WhatsApp (RF15):** o solicitante (`requester`) pode ser um `User` criado automaticamente pelo backend (role `USER`, e-mail sintético no formato `whatsapp+<telefone>@sgc.local`) — qualquer pessoa pode abrir chamado pelo WhatsApp sem cadastro prévio no painel. Não há nada de especial para o frontend tratar: essas OS aparecem nas mesmas listagens, só com `channel: "WHATSAPP"` e, possivelmente, um `requester.email` reconhecível pelo prefixo `whatsapp+`.
 
 ### 6.11 Marcas — `/api/v1/brands`
 
@@ -800,12 +803,29 @@ Depreciação **linear, sem valor residual, por meses completos**, com a mesma v
 
 **Não há exportação em PDF.**
 
+### 6.17 Webhook do WhatsApp — `/api/v1/whatsapp/webhook` (não é para o frontend consumir)
+
+Documentado aqui só por completude — é chamado pela Meta (Graph API), não pelo frontend. Não requer JWT (liberado no `SecurityConfig`); a segurança é feita por assinatura própria.
+
+| Método | Path | Auth | Descrição |
+|---|---|---|---|
+| GET | `/` | Público | Desafio de verificação do webhook (`hub.mode`, `hub.verify_token`, `hub.challenge`) usado pela Meta ao configurar a integração |
+| POST | `/` | Público, validado por `X-Hub-Signature-256` (HMAC-SHA256) | Recebe eventos de mensagem (`messages`) e de status de entrega (`statuses`) |
+
+Desde 2026-10-02, toda mensagem de texto recebida (`messages`) é interpretada (RF15): se estiver no formato
+```
+Abrir OS
+Setor: <nome do setor>
+Bem: <tombamento, opcional>
+Problema: <descrição>
+```
+o backend abre a OS de fato (`channel: WHATSAPP`, ver 6.10) e responde com a confirmação; se o setor/bem não existir, responde com o erro explicando o formato. Desde 2026-10-02, a mensagem `Status` (lista os últimos chamados do telefone) ou `Status #<número>` (detalhe de um chamado) também é interpretada (RF16) — só mostra o chamado se ele pertencer ao telefone que perguntou; qualquer outra mensagem recebe a mensagem de boas-vindas com os dois formatos. Não há nada aqui que o frontend precise chamar ou exibir — é tudo mensagem de WhatsApp, não API.
+
 ## 7. O que NÃO existe ainda (não tente consumir)
 
 Para o frontend não implementar telas para funcionalidades inexistentes:
 
-- **Sem integração WhatsApp**: não há webhook, não há chatbot, não há endpoint de envio/recebimento de mensagens.
-- **Notificações só por e-mail**: eventos da OS disparam e-mail (SendGrid), mas **não há WhatsApp** e **não existe endpoint `/notifications`** para consultar o que foi enviado.
+- **Não existe endpoint `/notifications`** para consultar o que foi enviado (nem por e-mail nem por WhatsApp) — o registro fica só em `tb_notifications`, sem endpoint de leitura.
 - **Sem exportação em PDF**: os relatórios (6.16) só têm JSON e CSV. O dashboard (`GET /api/v1/dashboard`) **não** traz agregação por categoria de bem — use `GET /reports/assets`.
 - **Sem baixa patrimonial estruturada**: retirar um bem do acervo usa o mecanismo genérico de soft delete (`DELETE /api/v1/assets/{id}`), sem campo de motivo/data/responsável pela baixa.
 - **Sem reabertura de OS**: não é possível voltar uma OS para `OPEN` nem alterar uma OS `RESOLVED`/`CANCELLED` (ver `PATCH /{id}/status`, 6.10).
