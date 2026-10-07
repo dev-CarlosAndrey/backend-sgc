@@ -1,6 +1,7 @@
 package br.com.fpo.sgc.domain.employee;
 
 import br.com.fpo.sgc.common.exception.BusinessException;
+import br.com.fpo.sgc.domain.audit.AuditLogService;
 import br.com.fpo.sgc.domain.company.Company;
 import br.com.fpo.sgc.domain.company.CompanyRepository;
 import br.com.fpo.sgc.domain.employee.dto.EmployeeRequestDTO;
@@ -23,6 +24,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final CompanyRepository companyRepository;
     private final SectorRepository sectorRepository;
     private final EmployeeMapper employeeMapper;
+    private final AuditLogService auditLogService;
 
     @Override
     @Transactional
@@ -46,6 +48,14 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         Employee employee = employeeMapper.toEntity(dto, company, sector);
         Employee savedEmployee = employeeRepository.save(employee);
+
+        auditLogService.log(
+                "Employee",
+                savedEmployee.getId(),
+                "CREATE",
+                savedEmployee.getName(),
+                "Funcionário " + savedEmployee.getName() + " cadastrado"
+        );
 
         return employeeMapper.toDTO(savedEmployee);
     }
@@ -83,6 +93,14 @@ public class EmployeeServiceImpl implements EmployeeService {
         employeeMapper.updateEntityFromDto(employee, dto, company, sector);
         Employee updatedEmployee = employeeRepository.save(employee);
 
+        auditLogService.log(
+                "Employee",
+                updatedEmployee.getId(),
+                "UPDATE",
+                updatedEmployee.getName(),
+                "Funcionário " + updatedEmployee.getName() + " atualizado"
+        );
+
         return employeeMapper.toDTO(updatedEmployee);
     }
 
@@ -94,5 +112,13 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         employee.setActive(false);
         employeeRepository.save(employee);
+
+        auditLogService.log(
+                "Employee",
+                id,
+                "DELETE",
+                employee.getName(),
+                "Funcionário " + employee.getName() + " inativado"
+        );
     }
 }
