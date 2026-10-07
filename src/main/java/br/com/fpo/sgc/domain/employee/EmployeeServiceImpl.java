@@ -1,5 +1,6 @@
 package br.com.fpo.sgc.domain.employee;
 
+import br.com.fpo.sgc.common.exception.BusinessException;
 import br.com.fpo.sgc.domain.company.Company;
 import br.com.fpo.sgc.domain.company.CompanyRepository;
 import br.com.fpo.sgc.domain.employee.dto.EmployeeRequestDTO;
@@ -27,11 +28,11 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Transactional
     public EmployeeResponseDTO create(EmployeeRequestDTO dto) {
         if (employeeRepository.existsByCpf(dto.cpf())) {
-            throw new IllegalArgumentException("Já existe um funcionário cadastrado com este CPF.");
+            throw new BusinessException("Já existe um funcionário cadastrado com este CPF.");
         }
 
         if (employeeRepository.existsByRegistrationNumber(dto.registrationNumber())) {
-            throw new IllegalArgumentException("Já existe um funcionário cadastrado com esta matrícula.");
+            throw new BusinessException("Já existe um funcionário cadastrado com esta matrícula.");
         }
 
         Company company = companyRepository.findById(dto.companyId())
