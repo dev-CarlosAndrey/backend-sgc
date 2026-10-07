@@ -37,6 +37,7 @@ import java.time.LocalDate;
 public class ReportController {
 
     private static final MediaType CSV = MediaType.parseMediaType("text/csv;charset=UTF-8");
+    private static final MediaType PDF = MediaType.APPLICATION_PDF;
 
     private final ReportService reportService;
     private final ServiceOrderInsightsService serviceOrderInsights;
@@ -53,6 +54,12 @@ public class ReportController {
     @GetMapping("/assets/export")
     public ResponseEntity<byte[]> exportAssetsReport(@RequestParam(required = false) Long companyId) {
         return csv("bens-por-categoria.csv", reportService.assetsReportCsv(companyId));
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/assets/export/pdf")
+    public ResponseEntity<byte[]> exportAssetsReportPdf(@RequestParam(required = false) Long companyId) {
+        return pdf("bens-por-categoria.pdf", reportService.assetsReportPdf(companyId));
     }
 
     // Datas inclusivas (yyyy-MM-dd); field = OPENED (abertura, padrão) ou CLOSED (conclusão/cancelamento).
@@ -82,6 +89,19 @@ public class ReportController {
                 new ServiceOrderReportFilter(from, to, field, technicianId, status, companyId)));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/service-orders/export/pdf")
+    public ResponseEntity<byte[]> exportServiceOrdersReportPdf(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "OPENED") ServiceOrderPeriodField field,
+            @RequestParam(required = false) Long technicianId,
+            @RequestParam(required = false) ServiceOrderStatus status,
+            @RequestParam(required = false) Long companyId) {
+        return pdf("ordens-de-servico.pdf", reportService.serviceOrdersPdf(
+                new ServiceOrderReportFilter(from, to, field, technicianId, status, companyId)));
+    }
+
     // Custo de manutenção (OS RESOLVED com custo) × valor de aquisição do bem. threshold em %: acima dele o bem
     // é sinalizado como candidato a substituição. field = CLOSED (padrão, quando o custo foi realizado) ou OPENED.
     @PreAuthorize("hasRole('ADMIN')")
@@ -108,6 +128,18 @@ public class ReportController {
                 new MaintenanceCostFilter(from, to, field, companyId, threshold)));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/maintenance-cost/export/pdf")
+    public ResponseEntity<byte[]> exportMaintenanceCostReportPdf(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "CLOSED") ServiceOrderPeriodField field,
+            @RequestParam(required = false) Long companyId,
+            @RequestParam(defaultValue = "50") double threshold) {
+        return pdf("custo-manutencao-por-bem.pdf", reportService.maintenanceCostPdf(
+                new MaintenanceCostFilter(from, to, field, companyId, threshold)));
+    }
+
     // ---------- relatórios de análise ----------
 
     // Evolução mensal de OS: abertas (por abertura) × concluídas (por conclusão). Padrão: últimos 12 meses; máx. 60.
@@ -129,6 +161,15 @@ public class ReportController {
         return csv("os-por-mes.csv", serviceOrderInsights.monthlyCsv(new Period(from, to, companyId)));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/service-orders/monthly/export/pdf")
+    public ResponseEntity<byte[]> exportMonthlyServiceOrdersPdf(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long companyId) {
+        return pdf("os-por-mes.pdf", serviceOrderInsights.monthlyPdf(new Period(from, to, companyId)));
+    }
+
     // Tempo em cada etapa do fluxo da OS, calculado sobre as OS abertas no período.
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/service-orders/stage-times")
@@ -146,6 +187,15 @@ public class ReportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long companyId) {
         return csv("tempo-por-etapa.csv", serviceOrderInsights.stageTimesCsv(new Period(from, to, companyId)));
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/service-orders/stage-times/export/pdf")
+    public ResponseEntity<byte[]> exportStageTimesPdf(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long companyId) {
+        return pdf("tempo-por-etapa.pdf", serviceOrderInsights.stageTimesPdf(new Period(from, to, companyId)));
     }
 
     // Depreciação linear em usefulLifeYears (padrão 10) na data asOf (padrão hoje); groupBy = CATEGORY (padrão) | SECTOR.
@@ -169,6 +219,16 @@ public class ReportController {
         return csv("patrimonio.csv", assetInsights.patrimonyCsv(new Patrimony(companyId, groupBy, usefulLifeYears, asOf)));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/assets/patrimony/export/pdf")
+    public ResponseEntity<byte[]> exportPatrimonyPdf(
+            @RequestParam(required = false) Long companyId,
+            @RequestParam(defaultValue = "CATEGORY") GroupBy groupBy,
+            @RequestParam(defaultValue = "10") int usefulLifeYears,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOf) {
+        return pdf("patrimonio.pdf", assetInsights.patrimonyPdf(new Patrimony(companyId, groupBy, usefulLifeYears, asOf)));
+    }
+
     // Bens em estado ruim/inservível ou com pelo menos minOrders OS (não canceladas) abertas no período.
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/assets/critical")
@@ -188,6 +248,16 @@ public class ReportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(defaultValue = "2") int minOrders) {
         return csv("bens-criticos.csv", assetInsights.criticalAssetsCsv(new Critical(companyId, from, to, minOrders)));
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/assets/critical/export/pdf")
+    public ResponseEntity<byte[]> exportCriticalAssetsPdf(
+            @RequestParam(required = false) Long companyId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "2") int minOrders) {
+        return pdf("bens-criticos.pdf", assetInsights.criticalAssetsPdf(new Critical(companyId, from, to, minOrders)));
     }
 
     // Resumo das movimentações no período; a lista completa está no CSV.
@@ -211,6 +281,16 @@ public class ReportController {
         return csv("movimentacoes.csv", traceability.movementsCsv(new Movements(from, to, assetId, companyId)));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/movements/export/pdf")
+    public ResponseEntity<byte[]> exportMovementsPdf(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long assetId,
+            @RequestParam(required = false) Long companyId) {
+        return pdf("movimentacoes.pdf", traceability.movementsPdf(new Movements(from, to, assetId, companyId)));
+    }
+
     // Resumo do log de auditoria; o CSV traz os 10.000 eventos mais recentes do filtro.
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/audit")
@@ -232,9 +312,28 @@ public class ReportController {
         return csv("auditoria.csv", traceability.auditCsv(new Audit(from, to, entityName, performedBy)));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/audit/export/pdf")
+    public ResponseEntity<byte[]> exportAuditPdf(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) String entityName,
+            @RequestParam(required = false) String performedBy) {
+        return pdf("auditoria.pdf", traceability.auditPdf(new Audit(from, to, entityName, performedBy)));
+    }
+
     private ResponseEntity<byte[]> csv(String filename, byte[] content) {
         return ResponseEntity.ok()
                 .contentType(CSV)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(filename).build().toString())
+                .body(content);
+    }
+
+    // O PDF é gerado inteiramente em memória (PdfWriter) e nunca é persistido — a única cópia que existe
+    // é o corpo desta resposta; para ter o arquivo de novo, o cliente gera de novo.
+    private ResponseEntity<byte[]> pdf(String filename, byte[] content) {
+        return ResponseEntity.ok()
+                .contentType(PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(filename).build().toString())
                 .body(content);
     }

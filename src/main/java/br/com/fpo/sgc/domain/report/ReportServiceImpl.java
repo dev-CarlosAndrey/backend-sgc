@@ -2,7 +2,9 @@ package br.com.fpo.sgc.domain.report;
 
 import br.com.fpo.sgc.common.exception.BusinessException;
 import br.com.fpo.sgc.common.util.CsvWriter;
+import br.com.fpo.sgc.common.util.PdfWriter;
 import br.com.fpo.sgc.common.util.PeriodRange;
+import br.com.fpo.sgc.common.util.TableData;
 import br.com.fpo.sgc.domain.asset.Asset;
 import br.com.fpo.sgc.domain.asset.AssetRepository;
 import br.com.fpo.sgc.domain.asset.AssetStatus;
@@ -70,6 +72,18 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public byte[] assetsReportCsv(Long companyId) {
+        TableData table = assetsTable(companyId);
+        return CsvWriter.toBytes(table.header(), table.rows());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] assetsReportPdf(Long companyId) {
+        TableData table = assetsTable(companyId);
+        return PdfWriter.toBytes("Relatório de Bens por Categoria", table.header(), table.rows(), false);
+    }
+
+    private TableData assetsTable(Long companyId) {
         AssetReportDTO report = assetsReport(companyId);
 
         List<String> header = new ArrayList<>(List.of("Categoria", "Total"));
@@ -85,7 +99,7 @@ public class ReportServiceImpl implements ReportService {
         report.byStatus().forEach(item -> totals.add(String.valueOf(item.total())));
         rows.add(totals);
 
-        return CsvWriter.toBytes(header, rows);
+        return new TableData(header, rows);
     }
 
     // ---------- RF20: ordens de serviço por período/técnico/status ----------
@@ -151,6 +165,18 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public byte[] serviceOrdersCsv(ServiceOrderReportFilter filter) {
+        TableData table = serviceOrdersTable(filter);
+        return CsvWriter.toBytes(table.header(), table.rows());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] serviceOrdersPdf(ServiceOrderReportFilter filter) {
+        TableData table = serviceOrdersTable(filter);
+        return PdfWriter.toBytes("Relatório de Ordens de Serviço", table.header(), table.rows(), true);
+    }
+
+    private TableData serviceOrdersTable(ServiceOrderReportFilter filter) {
         List<String> header = List.of("Código", "Título", "Status", "Prioridade", "Canal", "Solicitante", "Técnico",
                 "Bem (tombamento)", "Setor", "Abertura", "Conclusão", "Custo");
 
@@ -169,7 +195,7 @@ public class ReportServiceImpl implements ReportService {
                 so.getCost() != null ? so.getCost().setScale(2, RoundingMode.HALF_UP).toPlainString().replace('.', ',') : ""
         )).toList();
 
-        return CsvWriter.toBytes(header, rows);
+        return new TableData(header, rows);
     }
 
     // ---------- Custo de manutenção × valor do bem ----------
@@ -214,6 +240,18 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public byte[] maintenanceCostCsv(MaintenanceCostFilter filter) {
+        TableData table = maintenanceCostTable(filter);
+        return CsvWriter.toBytes(table.header(), table.rows());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] maintenanceCostPdf(MaintenanceCostFilter filter) {
+        TableData table = maintenanceCostTable(filter);
+        return PdfWriter.toBytes("Relatório de Custo de Manutenção × Valor do Bem", table.header(), table.rows(), true);
+    }
+
+    private TableData maintenanceCostTable(MaintenanceCostFilter filter) {
         List<String> header = List.of("Tombamento", "Bem", "Categoria", "Valor de aquisição", "Nº de OS",
                 "Custo de manutenção", "Custo / valor (%)", "Candidato a substituição");
 
@@ -228,7 +266,7 @@ public class ReportServiceImpl implements ReportService {
                 a.exceedsThreshold() ? "Sim" : "Não"
         )).toList();
 
-        return CsvWriter.toBytes(header, rows);
+        return new TableData(header, rows);
     }
 
     // ---------- apoio ----------

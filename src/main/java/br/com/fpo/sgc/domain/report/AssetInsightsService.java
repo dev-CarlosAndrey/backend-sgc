@@ -9,6 +9,8 @@ import br.com.fpo.sgc.domain.report.dto.PatrimonyReportDTO;
 public interface AssetInsightsService {
     PatrimonyReportDTO patrimony(Patrimony filter);
     byte[] patrimonyCsv(Patrimony filter);
+    byte[] patrimonyPdf(Patrimony filter);
     CriticalAssetsReportDTO criticalAssets(Critical filter);
     byte[] criticalAssetsCsv(Critical filter);
+    byte[] criticalAssetsPdf(Critical filter);
 }

@@ -8,6 +8,8 @@ import br.com.fpo.sgc.domain.report.dto.StageTimeReportDTO;
 public interface ServiceOrderInsightsService {
     MonthlyServiceOrdersReportDTO monthly(Period filter);
     byte[] monthlyCsv(Period filter);
+    byte[] monthlyPdf(Period filter);
     StageTimeReportDTO stageTimes(Period filter);
     byte[] stageTimesCsv(Period filter);
+    byte[] stageTimesPdf(Period filter);
 }

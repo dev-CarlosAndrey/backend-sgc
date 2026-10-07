@@ -9,6 +9,8 @@ import br.com.fpo.sgc.domain.report.dto.MovementReportDTO;
 public interface TraceabilityReportService {
     MovementReportDTO movements(Movements filter);
     byte[] movementsCsv(Movements filter);
+    byte[] movementsPdf(Movements filter);
     AuditReportDTO audit(Audit filter);
     byte[] auditCsv(Audit filter);
+    byte[] auditPdf(Audit filter);
 }

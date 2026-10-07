@@ -107,6 +107,15 @@ class ServiceOrderInsightsServiceImplTest {
         assertTrue(csv.contains("2026-09;0;0;0,00"));
     }
 
+    @Test
+    void pdfMensal_geraPdfValido() {
+        when(serviceOrderRepository.findForReport(any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of());
+
+        byte[] pdf = service.monthlyPdf(new Period(LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30), null));
+
+        assertEquals("%PDF", new String(pdf, 0, 4, StandardCharsets.US_ASCII));
+    }
+
     // ---------- tempo por etapa ----------
 
     @Test
@@ -160,5 +169,14 @@ class ServiceOrderInsightsServiceImplTest {
         assertEquals(0, report.orders());
         assertNull(report.bottleneck());
         assertNull(report.stages().get(0).avgHours());
+    }
+
+    @Test
+    void pdfDeTempoPorEtapa_geraPdfValido() {
+        when(statusLogRepository.findForReport(any(), any(), any())).thenReturn(List.of());
+
+        byte[] pdf = service.stageTimesPdf(new Period(null, null, null));
+
+        assertEquals("%PDF", new String(pdf, 0, 4, StandardCharsets.US_ASCII));
     }
 }

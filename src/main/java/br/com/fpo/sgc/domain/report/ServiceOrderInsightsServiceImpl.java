@@ -2,7 +2,9 @@ package br.com.fpo.sgc.domain.report;
 
 import br.com.fpo.sgc.common.exception.BusinessException;
 import br.com.fpo.sgc.common.util.CsvWriter;
+import br.com.fpo.sgc.common.util.PdfWriter;
 import br.com.fpo.sgc.common.util.PeriodRange;
+import br.com.fpo.sgc.common.util.TableData;
 import br.com.fpo.sgc.domain.report.ReportFilters.Period;
 import br.com.fpo.sgc.domain.report.dto.*;
 import br.com.fpo.sgc.domain.serviceorder.ServiceOrder;
@@ -89,9 +91,21 @@ public class ServiceOrderInsightsServiceImpl implements ServiceOrderInsightsServ
     @Override
     @Transactional(readOnly = true)
     public byte[] monthlyCsv(Period filter) {
+        TableData table = monthlyTable(filter);
+        return CsvWriter.toBytes(table.header(), table.rows());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] monthlyPdf(Period filter) {
+        TableData table = monthlyTable(filter);
+        return PdfWriter.toBytes("Relatório de Evolução Mensal de OS", table.header(), table.rows(), false);
+    }
+
+    private TableData monthlyTable(Period filter) {
         List<List<String>> rows = monthly(filter).months().stream().map(r -> List.of(
                 r.month(), String.valueOf(r.opened()), String.valueOf(r.resolved()), money(r.cost()))).toList();
-        return CsvWriter.toBytes(List.of("Mês", "Abertas", "Concluídas", "Custo das concluídas"), rows);
+        return new TableData(List.of("Mês", "Abertas", "Concluídas", "Custo das concluídas"), rows);
     }
 
     // ---------- tempo por etapa ----------
@@ -160,13 +174,25 @@ public class ServiceOrderInsightsServiceImpl implements ServiceOrderInsightsServ
     @Override
     @Transactional(readOnly = true)
     public byte[] stageTimesCsv(Period filter) {
+        TableData table = stageTimesTable(filter);
+        return CsvWriter.toBytes(table.header(), table.rows());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] stageTimesPdf(Period filter) {
+        TableData table = stageTimesTable(filter);
+        return PdfWriter.toBytes("Relatório de Tempo por Etapa", table.header(), table.rows(), false);
+    }
+
+    private TableData stageTimesTable(Period filter) {
         StageTimeReportDTO report = stageTimes(filter);
         List<List<String>> rows = new ArrayList<>();
         report.stages().forEach(s -> rows.add(List.of("Etapa", stageLabel(s.status()), String.valueOf(s.samples()),
                 num(s.avgHours()), num(s.maxHours()))));
         report.byPriority().forEach(p -> rows.add(List.of("Prioridade", priorityLabel(p.priority()),
                 String.valueOf(p.orders()), num(p.avgFirstResponseHours()), num(p.avgResolutionHours()))));
-        return CsvWriter.toBytes(List.of("Tipo", "Item", "Quantidade",
+        return new TableData(List.of("Tipo", "Item", "Quantidade",
                 "Média (h) / 1º atendimento (h)", "Máx. (h) / Resolução média (h)"), rows);
     }
 

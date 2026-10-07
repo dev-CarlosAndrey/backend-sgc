@@ -76,6 +76,16 @@ class TraceabilityReportServiceImplTest {
     }
 
     @Test
+    void pdfDeMovimentacoes_geraPdfValido() {
+        when(movementRepository.findForReport(any(), any(), any(), any())).thenReturn(List.of(
+                movement(1, "T-1", "Sala 1", "Sala 2", null)));
+
+        byte[] pdf = service.movementsPdf(new Movements(null, null, null, null));
+
+        assertEquals("%PDF", new String(pdf, 0, 4, StandardCharsets.US_ASCII));
+    }
+
+    @Test
     void auditoria_somaTotalEUsaRotuloParaUsuarioNulo() {
         when(auditLogRepository.countByEntity(any(), any(), any(), any())).thenReturn(List.<Object[]>of(
                 new Object[]{"Asset", 5L}, new Object[]{"ServiceOrder", 2L}));
@@ -106,5 +116,19 @@ class TraceabilityReportServiceImplTest {
         assertEquals(TraceabilityReportServiceImpl.AUDIT_CSV_LIMIT, page.getValue().getPageSize());
         assertTrue(csv.contains("Data;Entidade;ID;Ação;Usuário;Detalhes"));
         assertTrue(csv.contains("10/09/2026 12:30;Asset;7;CREATE;admin;Criado"));
+    }
+
+    @Test
+    void pdfDeAuditoria_usaLimiteMenorQueOCsv() {
+        AuditLog event = AuditLog.builder().entityName("Asset").entityId(7L).action("CREATE").performedBy("admin")
+                .details("Criado").createdAt(Instant.parse("2026-09-10T15:30:00Z")).build();
+        when(auditLogRepository.findForReport(any(), any(), any(), any(), any())).thenReturn(List.of(event));
+
+        byte[] pdf = service.auditPdf(new Audit(null, null, null, null));
+
+        ArgumentCaptor<Pageable> page = ArgumentCaptor.forClass(Pageable.class);
+        verify(auditLogRepository).findForReport(any(), any(), any(), any(), page.capture());
+        assertEquals(TraceabilityReportServiceImpl.AUDIT_PDF_LIMIT, page.getValue().getPageSize());
+        assertEquals("%PDF", new String(pdf, 0, 4, StandardCharsets.US_ASCII));
     }
 }

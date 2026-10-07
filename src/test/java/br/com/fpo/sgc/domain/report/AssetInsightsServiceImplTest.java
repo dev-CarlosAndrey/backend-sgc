@@ -115,6 +115,16 @@ class AssetInsightsServiceImplTest {
         assertTrue(csv.contains("Total geral;1;0;1000,00;500,00;500,00"));
     }
 
+    @Test
+    void pdfDePatrimonio_geraPdfValido() {
+        when(assetRepository.findForPatrimony(null)).thenReturn(List.of(
+                asset(1, "T-1", "Informática", "Sala 1", "1000.00", AS_OF.minusYears(5), null)));
+
+        byte[] pdf = service.patrimonyPdf(new Patrimony(null, GroupBy.CATEGORY, 10, AS_OF));
+
+        assertEquals("%PDF", new String(pdf, 0, 4, StandardCharsets.US_ASCII));
+    }
+
     // ---------- bens críticos ----------
 
     @Test
@@ -165,5 +175,16 @@ class AssetInsightsServiceImplTest {
 
         assertTrue(csv.contains("Tombamento;Bem;Setor;Categoria;Estado de conservação;Nº de OS;Custo de manutenção;Motivo"));
         assertTrue(csv.contains("T-1;Bem T-1;Sala 1;Info;Ruim;0;0,00;Estado ruim/inservível"));
+    }
+
+    @Test
+    void pdfDeCriticos_geraPdfValido() {
+        when(assetRepository.findByConservationStates(any(), any())).thenReturn(List.of(
+                asset(1, "T-1", "Info", "Sala 1", null, null, AssetConservationState.BAD)));
+        when(serviceOrderRepository.findForReport(any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of());
+
+        byte[] pdf = service.criticalAssetsPdf(new Critical(null, null, null, 2));
+
+        assertEquals("%PDF", new String(pdf, 0, 4, StandardCharsets.US_ASCII));
     }
 }

@@ -1,7 +1,9 @@
 package br.com.fpo.sgc.domain.report;
 
 import br.com.fpo.sgc.common.util.CsvWriter;
+import br.com.fpo.sgc.common.util.PdfWriter;
 import br.com.fpo.sgc.common.util.PeriodRange;
+import br.com.fpo.sgc.common.util.TableData;
 import br.com.fpo.sgc.domain.asset.movement.AssetMovement;
 import br.com.fpo.sgc.domain.asset.movement.AssetMovementRepository;
 import br.com.fpo.sgc.domain.audit.AuditLog;
@@ -28,6 +30,8 @@ public class TraceabilityReportServiceImpl implements TraceabilityReportService 
     private static final int TOP_ASSETS_LIMIT = 5;
     // O log de auditoria cresce sem parar: o CSV traz os eventos mais recentes do filtro, até este limite.
     static final int AUDIT_CSV_LIMIT = 10_000;
+    // PDF é pra leitura/impressão, não dump de dados: limite bem menor que o CSV.
+    static final int AUDIT_PDF_LIMIT = 300;
     private static final String NO_USER = "Sem usuário";
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
             .withZone(PeriodRange.BUSINESS_ZONE);
@@ -62,6 +66,18 @@ public class TraceabilityReportServiceImpl implements TraceabilityReportService 
     @Override
     @Transactional(readOnly = true)
     public byte[] movementsCsv(Movements filter) {
+        TableData table = movementsTable(filter);
+        return CsvWriter.toBytes(table.header(), table.rows());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] movementsPdf(Movements filter) {
+        TableData table = movementsTable(filter);
+        return PdfWriter.toBytes("Relatório de Movimentações", table.header(), table.rows(), true);
+    }
+
+    private TableData movementsTable(Movements filter) {
         List<List<String>> rows = fetchMovements(filter).stream().map(m -> List.of(
                 DATE_TIME.format(m.getMovementDate()),
                 m.getAsset().getTagNumber(),
@@ -70,7 +86,7 @@ public class TraceabilityReportServiceImpl implements TraceabilityReportService 
                 m.getDestinationSector().getName(),
                 m.getReason() != null ? m.getReason() : ""
         )).toList();
-        return CsvWriter.toBytes(List.of("Data", "Tombamento", "Bem", "Setor de origem", "Setor de destino", "Motivo"), rows);
+        return new TableData(List.of("Data", "Tombamento", "Bem", "Setor de origem", "Setor de destino", "Motivo"), rows);
     }
 
     private List<AssetMovement> fetchMovements(Movements filter) {
@@ -107,9 +123,22 @@ public class TraceabilityReportServiceImpl implements TraceabilityReportService 
     @Override
     @Transactional(readOnly = true)
     public byte[] auditCsv(Audit filter) {
+        TableData table = auditTable(filter, AUDIT_CSV_LIMIT);
+        return CsvWriter.toBytes(table.header(), table.rows());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] auditPdf(Audit filter) {
+        TableData table = auditTable(filter, AUDIT_PDF_LIMIT);
+        return PdfWriter.toBytes("Relatório de Auditoria (últimos " + AUDIT_PDF_LIMIT + " eventos do filtro)",
+                table.header(), table.rows(), true);
+    }
+
+    private TableData auditTable(Audit filter, int limit) {
         PeriodRange range = PeriodRange.of(filter.from(), filter.to());
         List<AuditLog> events = auditLogRepository.findForReport(range.from(), range.to(),
-                blankToNull(filter.entityName()), blankToNull(filter.performedBy()), PageRequest.of(0, AUDIT_CSV_LIMIT));
+                blankToNull(filter.entityName()), blankToNull(filter.performedBy()), PageRequest.of(0, limit));
 
         List<List<String>> rows = events.stream().map(e -> List.of(
                 DATE_TIME.format(e.getCreatedAt()),
@@ -119,7 +148,7 @@ public class TraceabilityReportServiceImpl implements TraceabilityReportService 
                 e.getPerformedBy() != null ? e.getPerformedBy() : "",
                 e.getDetails() != null ? e.getDetails() : ""
         )).toList();
-        return CsvWriter.toBytes(List.of("Data", "Entidade", "ID", "Ação", "Usuário", "Detalhes"), rows);
+        return new TableData(List.of("Data", "Entidade", "ID", "Ação", "Usuário", "Detalhes"), rows);
     }
 
     private static List<LabelCountDTO> labels(List<Object[]> rows) {

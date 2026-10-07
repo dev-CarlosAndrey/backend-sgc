@@ -2,7 +2,9 @@ package br.com.fpo.sgc.domain.report;
 
 import br.com.fpo.sgc.common.exception.BusinessException;
 import br.com.fpo.sgc.common.util.CsvWriter;
+import br.com.fpo.sgc.common.util.PdfWriter;
 import br.com.fpo.sgc.common.util.PeriodRange;
+import br.com.fpo.sgc.common.util.TableData;
 import br.com.fpo.sgc.domain.asset.Asset;
 import br.com.fpo.sgc.domain.asset.AssetConservationState;
 import br.com.fpo.sgc.domain.asset.AssetRepository;
@@ -101,6 +103,18 @@ public class AssetInsightsServiceImpl implements AssetInsightsService {
     @Override
     @Transactional(readOnly = true)
     public byte[] patrimonyCsv(Patrimony filter) {
+        TableData table = patrimonyTable(filter);
+        return CsvWriter.toBytes(table.header(), table.rows());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] patrimonyPdf(Patrimony filter) {
+        TableData table = patrimonyTable(filter);
+        return PdfWriter.toBytes("Relatório de Patrimônio com Depreciação", table.header(), table.rows(), true);
+    }
+
+    private TableData patrimonyTable(Patrimony filter) {
         PatrimonyReportDTO report = patrimony(filter);
         String groupHeader = filter.groupBy() == GroupBy.SECTOR ? "Setor" : "Categoria";
 
@@ -110,7 +124,7 @@ public class AssetInsightsServiceImpl implements AssetInsightsService {
         rows.add(patrimonyLine("Total geral", report.assets(), report.assetsWithoutValuation(),
                 report.acquisitionValue(), report.accumulatedDepreciation(), report.bookValue()));
 
-        return CsvWriter.toBytes(List.of(groupHeader, "Bens", "Sem valorização", "Valor de aquisição",
+        return new TableData(List.of(groupHeader, "Bens", "Sem valorização", "Valor de aquisição",
                 "Depreciação acumulada", "Valor contábil"), rows);
     }
 
@@ -183,13 +197,25 @@ public class AssetInsightsServiceImpl implements AssetInsightsService {
     @Override
     @Transactional(readOnly = true)
     public byte[] criticalAssetsCsv(Critical filter) {
+        TableData table = criticalAssetsTable(filter);
+        return CsvWriter.toBytes(table.header(), table.rows());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] criticalAssetsPdf(Critical filter) {
+        TableData table = criticalAssetsTable(filter);
+        return PdfWriter.toBytes("Relatório de Bens Críticos", table.header(), table.rows(), true);
+    }
+
+    private TableData criticalAssetsTable(Critical filter) {
         List<List<String>> rows = criticalAssets(filter).assets().stream().map(a -> List.of(
                 a.tagNumber(), a.name(), a.sectorName(), a.categoryName(),
                 a.conservationState() != null ? conservationLabel(a.conservationState()) : "",
                 String.valueOf(a.orders()), money(a.maintenanceCost()),
                 String.join(" + ", a.reasons().stream().map(AssetInsightsServiceImpl::reasonLabel).toList())
         )).toList();
-        return CsvWriter.toBytes(List.of("Tombamento", "Bem", "Setor", "Categoria", "Estado de conservação",
+        return new TableData(List.of("Tombamento", "Bem", "Setor", "Categoria", "Estado de conservação",
                 "Nº de OS", "Custo de manutenção", "Motivo"), rows);
     }
 

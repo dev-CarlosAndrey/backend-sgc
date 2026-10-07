@@ -91,6 +91,16 @@ class ReportServiceImplTest {
         assertTrue(csv.contains("Total geral;5;0;5;0;0"));
     }
 
+    @Test
+    void pdfDeBens_geraPdfValido() {
+        when(assetRepository.countByCategoryAndStatus(null)).thenReturn(List.<Object[]>of(
+                new Object[]{1L, "Informática", AssetStatus.IN_USE, 5L}));
+
+        byte[] pdf = service.assetsReportPdf(null);
+
+        assertEquals("%PDF", new String(pdf, 0, 4, StandardCharsets.US_ASCII));
+    }
+
     // ---------- RF20 ----------
 
     @Test
@@ -179,6 +189,18 @@ class ReportServiceImplTest {
         assertTrue(csv.contains("2;OS 2;Aberta;Baixa;PANEL;Prof;;;Setor A;02/09/2026 10:00;;"));
     }
 
+    @Test
+    void pdfDeOs_geraPdfValido() {
+        when(serviceOrderRepository.findForReport(any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of(
+                order(1, ServiceOrderStatus.RESOLVED, ServiceOrderPriority.HIGH, User.builder().id(10L).name("Ana").build(),
+                        Asset.builder().id(100L).tagNumber("T-001").name("Projetor").build(),
+                        "2026-09-01T13:00:00Z", "2026-09-01T15:30:00Z", "100.5")));
+
+        byte[] pdf = service.serviceOrdersPdf(ALL);
+
+        assertEquals("%PDF", new String(pdf, 0, 4, StandardCharsets.US_ASCII));
+    }
+
     // ---------- custo de manutenção × valor do bem ----------
 
     private static MaintenanceCostFilter costFilter(double threshold) {
@@ -244,5 +266,17 @@ class ReportServiceImplTest {
 
         assertTrue(csv.contains("Tombamento;Bem;Categoria;Valor de aquisição;Nº de OS;Custo de manutenção;Custo / valor (%);Candidato a substituição"));
         assertTrue(csv.contains("T-001;Notebook;Sem categoria;2000,00;1;1200,50;60,0;Sim"));
+    }
+
+    @Test
+    void pdfDeCustoPorBem_geraPdfValido() {
+        Asset notebook = Asset.builder().id(1L).tagNumber("T-001").name("Notebook")
+                .acquisitionValue(new BigDecimal("2000")).build();
+        when(serviceOrderRepository.findForReport(any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of(
+                order(1, ServiceOrderStatus.RESOLVED, ServiceOrderPriority.HIGH, null, notebook, "2026-09-01T10:00:00Z", "2026-09-01T12:00:00Z", "1200.5")));
+
+        byte[] pdf = service.maintenanceCostPdf(costFilter(50));
+
+        assertEquals("%PDF", new String(pdf, 0, 4, StandardCharsets.US_ASCII));
     }
 }
