@@ -682,10 +682,13 @@ Sem `companyId`, os indicadores são globais (todas as empresas); com `companyId
 |---|---|---|
 | GET | `/assets?companyId=` | Bens por categoria e situação (RF19) |
 | GET | `/assets/export?companyId=` | Mesmo relatório em **CSV** |
+| GET | `/assets/export/pdf?companyId=` | Mesmo relatório em **PDF** |
 | GET | `/service-orders` | Indicadores de OS por período/técnico/status (RF20) |
 | GET | `/service-orders/export` | Lista de OS do filtro em **CSV** |
+| GET | `/service-orders/export/pdf` | Mesma lista em **PDF** (paisagem) |
 | GET | `/maintenance-cost` | Custo de manutenção × valor de aquisição por bem |
 | GET | `/maintenance-cost/export` | Mesmo relatório em **CSV** |
+| GET | `/maintenance-cost/export/pdf` | Mesmo relatório em **PDF** |
 | GET | `/service-orders/monthly` | Evolução mensal: OS abertas × concluídas e custo por mês |
 | GET | `/service-orders/stage-times` | Tempo médio em cada etapa do fluxo da OS e gargalo |
 | GET | `/assets/patrimony` | Patrimônio com depreciação linear por categoria ou setor |
@@ -693,6 +696,7 @@ Sem `companyId`, os indicadores são globais (todas as empresas); com `companyId
 | GET | `/movements` | Resumo das movimentações de bens no período |
 | GET | `/audit` | Resumo do log de auditoria (por entidade, ação e usuário) |
 | GET | `<qualquer um acima>/export` | Mesmo relatório em **CSV** (`os-por-mes.csv`, `tempo-por-etapa.csv`, `patrimonio.csv`, `bens-criticos.csv`, `movimentacoes.csv`, `auditoria.csv`) |
+| GET | `<qualquer um acima>/export/pdf` | Mesmo relatório em **PDF** (mesmos nomes de arquivo, extensão `.pdf`) |
 
 Filtros de `/service-orders` e `/service-orders/export` (todos opcionais; sem nenhum, cobre todas as OS ativas): `from`, `to` (datas `yyyy-MM-dd` inclusivas), `field` (`OPENED` padrão | `CLOSED`, indica a qual data o período se aplica), `technicianId`, `status`, `companyId`. `from` > `to` → 400.
 
@@ -801,7 +805,7 @@ Depreciação **linear, sem valor residual, por meses completos**, com a mesma v
 
 **CSV** (`/export`): resposta `text/csv; charset=UTF-8` com `Content-Disposition: attachment` (`bens-por-categoria.csv` / `ordens-de-servico.csv`). Formato pensado para o Excel pt-BR: separador `;`, UTF-8 com BOM, cabeçalhos e rótulos de status em português, datas `dd/MM/yyyy HH:mm` (fuso local), custo com vírgula (`25,50`). Textos que começam com `=`, `+`, `-` ou `@` recebem um apóstrofo na frente (proteção contra injeção de fórmulas). Para baixar no frontend, use `fetch` com o header `Authorization` e trate a resposta como `blob` (um `<a href>` simples não envia o token).
 
-**Não há exportação em PDF.**
+**PDF** (`/export/pdf`, desde 2026-10-07): mesma ideia do CSV — `GET .../export/pdf` ao lado de cada `GET .../export` existente, resposta `application/pdf` com `Content-Disposition: attachment` (ex.: `ordens-de-servico.pdf`). Gerado inteiramente em memória a partir dos mesmos dados do CSV (tabela com cabeçalho azul, título do relatório e timestamp de geração); **nada é salvo no backend** — o PDF não fica em disco nem no banco, só existe no corpo dessa resposta. Para baixar de novo, o frontend chama o endpoint de novo. Relatórios com muitas colunas (ex.: OS, 12 colunas) saem em paisagem automaticamente; o relatório de auditoria em PDF trás só os 300 eventos mais recentes do filtro (o CSV continua trazendo até 10.000 — PDF é para leitura, não dump de dados). Mesmos filtros de query string do `/export` correspondente.
 
 ### 6.17 Webhook do WhatsApp — `/api/v1/whatsapp/webhook` (não é para o frontend consumir)
 
@@ -826,7 +830,7 @@ o backend abre a OS de fato (`channel: WHATSAPP`, ver 6.10) e responde com a con
 Para o frontend não implementar telas para funcionalidades inexistentes:
 
 - **Não existe endpoint `/notifications`** para consultar o que foi enviado (nem por e-mail nem por WhatsApp) — o registro fica só em `tb_notifications`, sem endpoint de leitura.
-- **Sem exportação em PDF**: os relatórios (6.16) só têm JSON e CSV. O dashboard (`GET /api/v1/dashboard`) **não** traz agregação por categoria de bem — use `GET /reports/assets`.
+- O dashboard (`GET /api/v1/dashboard`) **não** traz agregação por categoria de bem — use `GET /reports/assets`.
 - **Sem baixa patrimonial estruturada**: retirar um bem do acervo usa o mecanismo genérico de soft delete (`DELETE /api/v1/assets/{id}`), sem campo de motivo/data/responsável pela baixa.
 - **Sem reabertura de OS**: não é possível voltar uma OS para `OPEN` nem alterar uma OS `RESOLVED`/`CANCELLED` (ver `PATCH /{id}/status`, 6.10).
 - **Sem `@PreAuthorize` por dono do recurso**: qualquer usuário autenticado pode ler qualquer OS/ativo/etc. de qualquer solicitante — a restrição de papel (seção 4) é por **tipo de operação**, não por "isso é meu".
