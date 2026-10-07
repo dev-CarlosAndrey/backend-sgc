@@ -93,5 +93,5 @@ Novos módulos de domínio devem seguir exatamente essa estrutura (entity/reposi
 
 ## Documentos de referência (mantenha atualizados)
 
-- `API_CONTRATO_FRONTEND.md` — contrato da API para o frontend. Atualize ao criar/alterar endpoint, DTO, regra de acesso ou formato de erro.
-- `PLANO_IMPLEMENTACAO_MVP.md` — roadmap, status por requisito (RF) e decisões (ex.: WhatsApp Cloud API no lugar da Evolution API, seção 0.2). Atualize o status ao concluir um item.
+- `docs/API_CONTRATO_FRONTEND.md` — contrato da API para o frontend. Atualize ao criar/alterar endpoint, DTO, regra de acesso ou formato de erro.
+- `docs/PLANO_IMPLEMENTACAO_MVP.md` — roadmap, status por requisito (RF) e decisões (ex.: WhatsApp Cloud API no lugar da Evolution API, seção 0.2). Atualize o status ao concluir um item.

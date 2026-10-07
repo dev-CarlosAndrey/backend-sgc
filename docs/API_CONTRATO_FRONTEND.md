@@ -1,6 +1,6 @@
 # Contrato da API — SGC API (para consumo pelo frontend)
 
-> Atualizado em 2026-10-02, a partir do código-fonte real de `src/main/java/br/com/fpo/sgc` e das migrations `V1–V19`, e conferido contra respostas reais da API rodando (formato de paginação, filtros, CSV, RBAC, CORS). Descreve o que existe e funciona hoje no backend — sem especulação sobre funcionalidades futuras. Cobre o núcleo administrativo (Fase 1), as notificações por e-mail **e por WhatsApp** e os relatórios (RF19/RF20). Desde 2026-10-02, OS também podem nascer de uma mensagem de WhatsApp e ser consultadas por lá (RF15/RF16, ver 6.10/6.17) — o frontend vai ver essas OS misturadas nas mesmas listagens, com `channel: "WHATSAPP"`. Os quatro requisitos funcionais do WhatsApp (RF14–RF17) estão concluídos; não há endpoint novo que o frontend precise chamar por causa disso — é tudo mensagem de WhatsApp. Ver `PLANO_IMPLEMENTACAO_MVP.md` para o roadmap completo.
+> Atualizado em 2026-10-02, a partir do código-fonte real de `../src/main/java/br/com/fpo/sgc` e das migrations `V1–V19`, e conferido contra respostas reais da API rodando (formato de paginação, filtros, CSV, RBAC, CORS). Descreve o que existe e funciona hoje no backend — sem especulação sobre funcionalidades futuras. Cobre o núcleo administrativo (Fase 1), as notificações por e-mail **e por WhatsApp** e os relatórios (RF19/RF20). Desde 2026-10-02, OS também podem nascer de uma mensagem de WhatsApp e ser consultadas por lá (RF15/RF16, ver 6.10/6.17) — o frontend vai ver essas OS misturadas nas mesmas listagens, com `channel: "WHATSAPP"`. Os quatro requisitos funcionais do WhatsApp (RF14–RF17) estão concluídos; não há endpoint novo que o frontend precise chamar por causa disso — é tudo mensagem de WhatsApp. Ver `PLANO_IMPLEMENTACAO_MVP.md` para o roadmap completo.
 
 ## 1. Visão geral
 
@@ -837,7 +837,7 @@ Para o frontend não implementar telas para funcionalidades inexistentes:
 
 ## 8. Referências
 
-- Código-fonte: `src/main/java/br/com/fpo/sgc` (organização por domínio: `entity/repository/service+impl/controller/dto/mapper`).
+- Código-fonte: `../src/main/java/br/com/fpo/sgc` (organização por domínio: `entity/repository/service+impl/controller/dto/mapper`).
 - Migrations: `src/main/resources/db/migration/V1` a `V19`.
 - Roadmap completo, decisões de arquitetura e status detalhado por requisito funcional: `PLANO_IMPLEMENTACAO_MVP.md` (raiz deste repositório).
 - Swagger UI ao vivo: `GET /swagger-ui.html` no ambiente rodando.
