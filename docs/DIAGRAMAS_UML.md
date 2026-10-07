@@ -373,7 +373,7 @@ sequenceDiagram
     participant DB as NotificationRepository (tb_notifications)
 
     OSSvc->>Spring: publishEvent(ServiceOrderEvent: RESOLVED, actorUserId)
-    Note over OSSvc,Spring: publicado dentro da transação;<br/>listener só dispara após commit
+    Note over OSSvc,Spring: publicado dentro da transação —<br/>listener só dispara após commit
     Spring->>Listener: onServiceOrderEvent() [@Async, AFTER_COMMIT]
     Listener->>Listener: resolve destinatários (solicitante, técnico, ator — sem duplicar, só ativos)
 
