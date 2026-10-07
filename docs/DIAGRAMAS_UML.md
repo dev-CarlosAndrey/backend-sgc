@@ -370,22 +370,38 @@ sequenceDiagram
     participant Notif as NotificationServiceImpl
     participant WA as WhatsAppNotificationSender
     participant Email as EmailNotificationSender
-    participant DB as MySQL (tb_notifications)
+    participant DB as NotificationRepository (tb_notifications)
 
-    OSSvc->>Spring: publica ServiceOrderEvent (RESOLVED, actorUserId)
+    OSSvc->>Spring: publishEvent(ServiceOrderEvent: RESOLVED, actorUserId)
     Note over OSSvc,Spring: publicado dentro da transação;<br/>listener só dispara após commit
-    Spring->>Listener: @TransactionalEventListener(AFTER_COMMIT) [@Async]
-    Listener->>Notif: notify(solicitante, mensagem, status)
-    Notif->>WA: send(telefone, mensagem)
-    alt WhatsApp indisponível (token expirado, fora da janela 24h, etc.)
-        WA-->>Notif: falha (erro da Graph API)
-        Notif->>DB: registra tentativa (channel=WHATSAPP, status=FAILED)
-        Notif->>Email: send(email, mensagem, status)
-        Email-->>Notif: sucesso
-        Notif->>DB: registra tentativa (channel=EMAIL, status=SENT)
-    else WhatsApp disponível
-        WA-->>Notif: sucesso
-        Notif->>DB: registra tentativa (channel=WHATSAPP, status=SENT)
+    Spring->>Listener: onServiceOrderEvent() [@Async, AFTER_COMMIT]
+    Listener->>Listener: resolve destinatários (solicitante, técnico, ator — sem duplicar, só ativos)
+
+    loop para cada destinatário
+        Listener->>Notif: notifyUser(serviceOrder, recipient, subject, message, status)
+        Notif->>WA: canSend(recipient)?
+        alt WhatsApp configurado e aplicável ao destinatário
+            loop até maxAttempts (padrão 3) ou sucesso
+                Notif->>WA: send(recipient, subject, message, status)
+                alt envio ok
+                    WA-->>Notif: sucesso
+                    Notif->>DB: grava tentativa (WHATSAPP, SENT, nº)
+                else falha (token expirado, fora da janela 24h, etc.)
+                    WA-->>Notif: exceção (erro da Graph API)
+                    Notif->>DB: grava tentativa (WHATSAPP, FAILED, nº, erro)
+                    Note over Notif: aguarda backoff linear<br/>(retryBackoffMs × tentativa) antes de repetir
+                end
+            end
+        else WhatsApp não configurado/não aplicável
+            Note over Notif,WA: canal pulado (canSend = false), sem gravar tentativa
+        end
+
+        opt WhatsApp não entregue após as tentativas e fallback habilitado
+            Note over Notif,Email: mesma lógica de tentativas e backoff do WhatsApp, agora para e-mail (SendGrid)
+            Notif->>Email: send(recipient, subject, message, status)
+            Email-->>Notif: sucesso ou exceção
+            Notif->>DB: grava tentativa (EMAIL, SENT ou FAILED, nº[, erro])
+        end
     end
     Note over Notif: falha de notificação nunca propaga exceção<br/>para a operação de negócio que originou o evento
 ```
