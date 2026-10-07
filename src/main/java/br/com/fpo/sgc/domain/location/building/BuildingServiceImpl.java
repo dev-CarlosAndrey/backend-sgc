@@ -1,6 +1,7 @@
 package br.com.fpo.sgc.domain.location.building;
 
 import br.com.fpo.sgc.common.exception.BusinessException;
+import br.com.fpo.sgc.domain.audit.AuditLogService;
 import br.com.fpo.sgc.domain.company.Company;
 import br.com.fpo.sgc.domain.company.CompanyRepository;
 import br.com.fpo.sgc.domain.location.building.dto.BuildingRequestDTO;
@@ -22,6 +23,7 @@ public class BuildingServiceImpl implements BuildingService {
     private final CompanyRepository companyRepository;
     private final SectorRepository sectorRepository;
     private final BuildingMapper buildingMapper; // Injeção do Mapper
+    private final AuditLogService auditLogService;
 
     @Override
     @Transactional
@@ -41,6 +43,15 @@ public class BuildingServiceImpl implements BuildingService {
                 .build();
 
         Building saved = buildingRepository.save(building);
+
+        auditLogService.log(
+                "Building",
+                saved.getId(),
+                "CREATE",
+                saved.getName(),
+                "Prédio " + saved.getName() + " cadastrado"
+        );
+
         return buildingMapper.toDTO(saved, 0);
     }
 
@@ -88,6 +99,15 @@ public class BuildingServiceImpl implements BuildingService {
         building.setCompany(company);
 
         Building updated = buildingRepository.save(building);
+
+        auditLogService.log(
+                "Building",
+                updated.getId(),
+                "UPDATE",
+                updated.getName(),
+                "Prédio " + updated.getName() + " atualizado"
+        );
+
         long sectorsCount = sectorRepository.countByBuildingId(updated.getId());
         return buildingMapper.toDTO(updated, sectorsCount);
     }
@@ -100,5 +120,13 @@ public class BuildingServiceImpl implements BuildingService {
 
         building.setActive(false);
         buildingRepository.save(building);
+
+        auditLogService.log(
+                "Building",
+                id,
+                "DELETE",
+                building.getName(),
+                "Prédio " + building.getName() + " inativado"
+        );
     }
 }
