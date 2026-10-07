@@ -7,6 +7,7 @@ import org.openpdf.text.Element;
 import org.openpdf.text.Font;
 import org.openpdf.text.PageSize;
 import org.openpdf.text.Paragraph;
+import org.openpdf.text.pdf.BaseFont;
 import org.openpdf.text.pdf.PdfPCell;
 import org.openpdf.text.pdf.PdfPTable;
 
@@ -16,6 +17,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Gera um PDF simples (título + tabela) inteiramente em memória — sem gravar em disco, sem
@@ -32,6 +34,39 @@ public final class PdfWriter {
     private static final Font SUBTITLE_FONT = new Font(Font.HELVETICA, 9, Font.ITALIC, Color.GRAY);
     private static final Font HEADER_FONT = new Font(Font.HELVETICA, 9, Font.BOLD, Color.WHITE);
     private static final Font CELL_FONT = new Font(Font.HELVETICA, 9);
+    private static final float PAGE_MARGIN_LEFT_RIGHT = 24f;
+    private static final float HEADER_CELL_PADDING = 5f;
+    private static final float BODY_CELL_PADDING = 4f;
+    private static final float WIDTH_SAFETY_BUFFER = 2f;
+    private static final float MAX_COLUMN_WIDTH = 170f;
+
+    // Cabeçalhos longos usados pelos relatórios (os mesmos do CSV, onde o nome completo é melhor — o Excel
+    // ajusta a largura da coluna sozinho) ficam abreviados só aqui no PDF, onde a largura da coluna é fixa
+    // e o texto do cabeçalho pode quebrar no meio da palavra se não couber numa linha.
+    private static final Map<String, String> HEADER_ABBREVIATIONS = Map.ofEntries(
+            Map.entry("Categoria", "Categ."),
+            Map.entry("Código", "Cód."),
+            Map.entry("Prioridade", "Prior."),
+            Map.entry("Solicitante", "Solic."),
+            Map.entry("Técnico", "Téc."),
+            Map.entry("Bem (tombamento)", "Bem (tomb.)"),
+            Map.entry("Tombamento", "Tomb."),
+            Map.entry("Valor de aquisição", "Val. aquis."),
+            Map.entry("Custo de manutenção", "Custo manut."),
+            Map.entry("Custo / valor (%)", "Custo/valor (%)"),
+            Map.entry("Candidato a substituição", "Candid. subst."),
+            Map.entry("Setor de origem", "Setor origem"),
+            Map.entry("Setor de destino", "Setor destino"),
+            Map.entry("Custo das concluídas", "Custo concl."),
+            Map.entry("Média (h) / 1º atendimento (h)", "Média/1º atend. (h)"),
+            Map.entry("Máx. (h) / Resolução média (h)", "Máx./Resol. (h)"),
+            Map.entry("Estado de conservação", "Estado conserv."),
+            Map.entry("Sem valorização", "Sem valoriz."),
+            Map.entry("Depreciação acumulada", "Deprec. acum."),
+            Map.entry("Valor contábil", "Val. contábil"),
+            Map.entry("Disponível", "Dispon."),
+            Map.entry("Em manutenção", "Em manut.")
+    );
 
     private PdfWriter() {
     }
@@ -54,7 +89,10 @@ public final class PdfWriter {
             if (rows.isEmpty()) {
                 document.add(new Paragraph("Nenhum registro encontrado para os filtros aplicados.", CELL_FONT));
             } else {
-                document.add(buildTable(header, rows));
+                List<String> abbreviatedHeader = header.stream().map(PdfWriter::abbreviate).toList();
+                float pageWidth = landscape ? PageSize.A4.rotate().getWidth() : PageSize.A4.getWidth();
+                float availableWidth = pageWidth - (2 * PAGE_MARGIN_LEFT_RIGHT);
+                document.add(buildTable(abbreviatedHeader, rows, availableWidth));
             }
 
             document.close();
@@ -65,15 +103,16 @@ public final class PdfWriter {
         return out.toByteArray();
     }
 
-    private static PdfPTable buildTable(List<String> header, List<List<String>> rows) {
+    private static PdfPTable buildTable(List<String> header, List<List<String>> rows, float availableWidth) {
         PdfPTable table = new PdfPTable(header.size());
-        table.setWidthPercentage(100);
         table.setHeaderRows(1);
+        float[] widths = columnWidths(header, rows, availableWidth);
         try {
-            table.setWidths(columnWidths(header, rows));
+            table.setTotalWidth(widths);
         } catch (DocumentException e) {
             throw new IllegalStateException("Falha ao calcular largura das colunas do PDF", e);
         }
+        table.setLockedWidth(true);
 
         for (String column : header) {
             PdfPCell cell = new PdfPCell(new org.openpdf.text.Phrase(column, HEADER_FONT));
@@ -94,24 +133,60 @@ public final class PdfWriter {
         return table;
     }
 
-    // Largura proporcional ao maior conteúdo de cada coluna (cabeçalho ou linha), com piso e teto — evita
-    // que colunas curtas (ex.: "Status") fiquem tão largas quanto colunas de texto livre (ex.: "Detalhes"),
-    // e que uma única célula muito longa domine a tabela inteira.
-    private static float[] columnWidths(List<String> header, List<List<String>> rows) {
-        float[] widths = new float[header.size()];
-        for (int i = 0; i < header.size(); i++) {
-            widths[i] = length(header.get(i));
+    // Largura em pontos medida com a métrica real da fonte (não contagem de caracteres) — garante que o
+    // cabeçalho (já abreviado) sempre caiba em uma linha. Cada coluna recebe no mínimo a largura do seu
+    // próprio cabeçalho (minWidths); o espaço excedente (naturalWidths - minWidths) de colunas de texto
+    // livre (ex.: "Título", "Setor") é o único reduzido quando a soma ultrapassa a largura da página —
+    // nunca o espaço reservado ao cabeçalho, que não tem folga pra ceder.
+    private static float[] columnWidths(List<String> header, List<List<String>> rows, float availableWidth) {
+        BaseFont headerBaseFont = HEADER_FONT.getCalculatedBaseFont(false);
+        BaseFont cellBaseFont = CELL_FONT.getCalculatedBaseFont(false);
+        int columnCount = header.size();
+
+        float[] minWidths = new float[columnCount];
+        float[] naturalWidths = new float[columnCount];
+        for (int i = 0; i < columnCount; i++) {
+            float headerWidth = headerBaseFont.getWidthPoint(header.get(i), HEADER_FONT.getSize())
+                    + (2 * HEADER_CELL_PADDING) + WIDTH_SAFETY_BUFFER;
+            minWidths[i] = headerWidth;
+            naturalWidths[i] = headerWidth;
         }
         for (List<String> row : rows) {
-            for (int i = 0; i < widths.length && i < row.size(); i++) {
-                widths[i] = Math.max(widths[i], length(row.get(i)));
+            for (int i = 0; i < columnCount && i < row.size(); i++) {
+                String value = row.get(i) != null ? row.get(i) : "";
+                float cellWidth = cellBaseFont.getWidthPoint(value, CELL_FONT.getSize())
+                        + (2 * BODY_CELL_PADDING) + WIDTH_SAFETY_BUFFER;
+                naturalWidths[i] = Math.max(naturalWidths[i], Math.min(cellWidth, MAX_COLUMN_WIDTH));
             }
+        }
+
+        float totalNatural = 0;
+        for (float w : naturalWidths) {
+            totalNatural += w;
+        }
+        if (totalNatural <= availableWidth) {
+            return naturalWidths;
+        }
+
+        float totalSlack = 0;
+        for (int i = 0; i < columnCount; i++) {
+            totalSlack += naturalWidths[i] - minWidths[i];
+        }
+        if (totalSlack <= 0) {
+            return minWidths;
+        }
+
+        float excess = totalNatural - availableWidth;
+        float shrinkRatio = Math.min(1f, excess / totalSlack);
+        float[] widths = new float[columnCount];
+        for (int i = 0; i < columnCount; i++) {
+            float slack = naturalWidths[i] - minWidths[i];
+            widths[i] = naturalWidths[i] - (slack * shrinkRatio);
         }
         return widths;
     }
 
-    private static float length(String value) {
-        int len = value != null ? value.length() : 0;
-        return Math.max(4, Math.min(40, len));
+    private static String abbreviate(String header) {
+        return HEADER_ABBREVIATIONS.getOrDefault(header, header);
     }
 }
