@@ -73,7 +73,7 @@ flowchart LR
 
 ## 2. Diagrama de classes (domínio)
 
-Representa as entidades JPA efetivamente implementadas (`@Entity`) e seus relacionamentos. Atributos omitidos quando óbvios pelo nome; tipos de enum anotados entre parênteses. Todas as entidades estendem `BaseEntity` (`createdAt`, `updatedAt`, `active`) — omitido em cada classe para não poluir o diagrama.
+Representa as entidades JPA efetivamente implementadas (`@Entity`) e seus relacionamentos. Atributos omitidos quando óbvios pelo nome; tipos de enum anotados entre parênteses. A maioria das entidades estende `BaseEntity` (`createdAt`, `updatedAt`, `active`), omitido em cada classe para não poluir o diagrama — exceções: `Company`, `Building` e `Brand` têm um `active` próprio (sem `createdAt`/`updatedAt`), e `AuditLog` não estende `BaseEntity`, mantendo apenas seu próprio `createdAt` (campo central de um log imutável, sem `updatedAt`/`active`).
 
 ```mermaid
 classDiagram
@@ -139,6 +139,7 @@ classDiagram
         +Long id
         +ServiceOrderStatus previousStatus
         +ServiceOrderStatus newStatus
+        +String changedBy
         +String note
     }
     class Notification {
@@ -146,7 +147,7 @@ classDiagram
         +String channel
         +String deliveryStatus
         +int attempt
-        +String error
+        +String errorMessage
     }
     class AuditLog {
         +Long id
@@ -171,11 +172,12 @@ classDiagram
     Asset "1" --> "0..*" AssetMovement
     Sector "1" --> "0..*" AssetMovement : origin/destination
     Asset "0..1" --> "0..*" ServiceOrder
+    Sector "1" --> "0..*" ServiceOrder
     User "1" --> "0..*" ServiceOrder : requester
     User "0..1" --> "0..*" ServiceOrder : technician
     ServiceOrder "1" --> "0..*" ServiceOrderStatusLog
     ServiceOrder "1" --> "0..*" Notification
-    User "0..*" --> "0..*" Notification : recipient
+    User "1" --> "0..*" Notification : recipient
     Brand "1" --> "0..*" Product
     Material "1" --> "0..*" Product
 ```
@@ -190,12 +192,13 @@ erDiagram
     tb_buildings ||--o{ tb_sectors : has
     tb_sectors ||--o{ tb_employees : has
     tb_companies ||--o{ tb_employees : has
-    tb_sectors |o--o| tb_employees : "manager_id"
+    tb_sectors |o--o| tb_employees : "manager_employee_id"
     tb_sectors ||--o{ tb_assets : has
     tb_asset_categories |o--o{ tb_assets : categorizes
     tb_employees |o--o{ tb_assets : "responsible_employee_id"
     tb_assets ||--o{ tb_asset_movements : has
     tb_assets |o--o{ tb_service_orders : "asset_id"
+    tb_sectors ||--o{ tb_service_orders : has
     tb_users ||--o{ tb_service_orders : "requester_id"
     tb_users |o--o{ tb_service_orders : "technician_id"
     tb_service_orders ||--o{ tb_service_order_status_logs : has
@@ -226,7 +229,7 @@ erDiagram
     tb_sectors {
         bigint id PK
         bigint building_id FK
-        bigint manager_id FK
+        bigint manager_employee_id FK
         varchar name
     }
     tb_employees {
@@ -264,6 +267,7 @@ erDiagram
     tb_service_orders {
         bigint id PK
         bigint asset_id FK
+        bigint sector_id FK
         bigint requester_id FK
         bigint technician_id FK
         varchar title
@@ -278,17 +282,17 @@ erDiagram
         bigint service_order_id FK
         varchar previous_status
         varchar new_status
-        bigint changed_by
+        varchar changed_by
         varchar note
     }
     tb_notifications {
         bigint id PK
         bigint service_order_id FK
-        bigint recipient_user_id FK
+        bigint recipient_id FK
         varchar channel
         varchar delivery_status
         int attempt
-        varchar error
+        varchar error_message
     }
     tb_audit_logs {
         bigint id PK
@@ -296,6 +300,7 @@ erDiagram
         bigint entity_id
         varchar action
         varchar performed_by
+        timestamp created_at
     }
     tb_brands {
         bigint id PK
