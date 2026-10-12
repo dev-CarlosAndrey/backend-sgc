@@ -334,7 +334,7 @@ sequenceDiagram
     participant OSSvc as ServiceOrderService
     participant DB as MySQL
 
-    U->>Meta: "Setor: Financeiro\nProblema: projetor sem imagem"
+    U->>Meta: "Setor: Financeiro<br/>Problema: projetor sem imagem"
     Meta->>WH: POST /api/v1/whatsapp/webhook (assinado X-Hub-Signature-256)
     WH->>WH: valida assinatura (WhatsAppSignatureVerifier)
     WH->>Reply: handleIncomingMessage() [@Async]
