@@ -2,9 +2,9 @@
 
 > **Status: integração concluída e validada com mensagens reais** (RF14–RF17, 2026-09-28 e 2026-10-02 — ver `PLANO_IMPLEMENTACAO_MVP.md`, seção 7.4). Este arquivo nasceu como checklist de implementação (daí o passo a passo de configuração na Meta e no ngrok, seções 1-5, que seguem válidas para reconfigurar o ambiente do zero se precisar) e hoje serve como referência de configuração + registro da decisão de trocar Evolution API por Cloud API. Leia também `PLANO_IMPLEMENTACAO_MVP.md` para o estado atual item a item.
 
-## ✅ Gate da escrita do TCC — liberado, mas ainda **não aplicado** no texto
+## ✅ Gate da escrita do TCC — liberado e aplicado
 
-A regra que existia aqui ("não mexer na redação do TCC até a integração estar validada de ponta a ponta") já foi cumprida: a validação ponta a ponta aconteceu em 2026-09-28 (envio/webhook/recebimento) e 2026-10-02 (abertura de OS e consulta de status por mensagem). **Pendência real**: a seção 6.5.1 do `.docx` do TCC (`~/Documents/tcc/`) ainda descreve a integração como "chatbot (Evolution API)" e ainda diz que WhatsApp/SendGrid "permanecem como etapas subsequentes do desenvolvimento" — nenhuma dessas frases foi atualizada no `.docx` ainda. Isso precisa ser revisado com cuidado (manter ABNT e as citações já existentes) antes da entrega final.
+A regra que existia aqui ("não mexer na redação do TCC até a integração estar validada de ponta a ponta") já foi cumprida: a validação ponta a ponta aconteceu em 2026-09-28 (envio/webhook/recebimento) e 2026-10-02 (abertura de OS e consulta de status por mensagem). Em 2026-10-18, a seção 6.5.1 do `.docx` do TCC (`~/Documents/tcc/`) foi reescrita: não cita mais "Evolution API" nem diz que WhatsApp/SendGrid "permanecem como etapas subsequentes" — agora descreve a integração com a WhatsApp Cloud API como implementada e validada, incluindo a justificativa da troca de provedor (risco de banimento da Evolution API) como decisão de engenharia tomada durante o desenvolvimento.
 
 ## 1. Contexto: por que migramos
 
@@ -140,4 +140,4 @@ O ngrok já está instalado e autenticado na máquina (`ngrok config add-authtok
 ## 6. Depois de validar tudo
 
 1. ~~Atualizar `PLANO_IMPLEMENTACAO_MVP.md` marcando a integração como **concluída e validada**~~ — feito (seção 0 e 7.4).
-2. **Ainda pendente**: revisar a escrita do TCC (seção 6.5.1, antiga 6.6.1) refletindo o uso real da WhatsApp Cloud API em vez da Evolution API, e removendo a frase que diz que WhatsApp/SendGrid "permanecem como etapas subsequentes do desenvolvimento" — isso deve ser feito com cuidado para manter o padrão ABNT e as citações acadêmicas já existentes no documento. Ver `DOCUMENTACAO_TECNICA_TCC.md`, seção 7, para o texto técnico já pronto que pode servir de base para essa revisão.
+2. ~~Revisar a escrita do TCC (seção 6.5.1) refletindo o uso real da WhatsApp Cloud API em vez da Evolution API~~ — feito em 2026-10-18.
