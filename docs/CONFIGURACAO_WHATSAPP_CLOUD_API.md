@@ -1,10 +1,10 @@
 # Configuração da Integração WhatsApp Cloud API — sgc-api
 
-> Gerado para uso com Claude CLI dentro do projeto `sgc-api`. Este arquivo resume tudo que já foi feito na Meta, o que falta implementar no código, e os passos de configuração local (ngrok + webhook). Leia também `PLANO_IMPLEMENTACAO_MVP.md` na raiz do projeto para o contexto geral do MVP.
+> **Status: integração concluída e validada com mensagens reais** (RF14–RF17, 2026-09-28 e 2026-10-02 — ver `PLANO_IMPLEMENTACAO_MVP.md`, seção 7.4). Este arquivo nasceu como checklist de implementação (daí o passo a passo de configuração na Meta e no ngrok, seções 1-5, que seguem válidas para reconfigurar o ambiente do zero se precisar) e hoje serve como referência de configuração + registro da decisão de trocar Evolution API por Cloud API. Leia também `PLANO_IMPLEMENTACAO_MVP.md` para o estado atual item a item.
 
-## ⚠️ Regra importante (não mexer ainda)
+## ✅ Gate da escrita do TCC — liberado, mas ainda **não aplicado** no texto
 
-**Não alterar a escrita oficial do TCC (docx) por causa desta migração.** A decisão de trocar Evolution API → WhatsApp Cloud API só deve ser refletida na redação acadêmica depois que toda a integração (envio + webhook + recebimento) estiver validada de ponta a ponta em ambiente real. Por enquanto, só atualizar arquivos de planejamento/status do projeto (`PLANO_IMPLEMENTACAO_MVP.md`).
+A regra que existia aqui ("não mexer na redação do TCC até a integração estar validada de ponta a ponta") já foi cumprida: a validação ponta a ponta aconteceu em 2026-09-28 (envio/webhook/recebimento) e 2026-10-02 (abertura de OS e consulta de status por mensagem). **Pendência real**: a seção 6.5.1 do `.docx` do TCC (`~/Documents/tcc/`) ainda descreve a integração como "chatbot (Evolution API)" e ainda diz que WhatsApp/SendGrid "permanecem como etapas subsequentes do desenvolvimento" — nenhuma dessas frases foi atualizada no `.docx` ainda. Isso precisa ser revisado com cuidado (manter ABNT e as citações já existentes) antes da entrega final.
 
 ## 1. Contexto: por que migramos
 
@@ -40,9 +40,9 @@ SENDGRID_FROM_EMAIL               (já setado)
 
 Antes de escrever/alterar código, **ler o `application.yml` atual** para confirmar os nomes exatos das propriedades já mapeadas (ex.: `whatsapp.cloud-api.access-token`, `whatsapp.cloud-api.phone-number-id`, etc.) e reaproveitar essa estrutura em vez de criar propriedades novas duplicadas.
 
-## 4. Estado atual do código (já existe — revisar antes de reescrever)
+## 4. Estado atual do código — implementado e testado
 
-Os seguintes arquivos já existem no projeto e parecem ser de uma tentativa anterior de implementação. **Ler o conteúdo de cada um antes de decidir o que falta**, para não duplicar lógica nem quebrar algo que já funciona:
+Os arquivos abaixo implementam a integração completa (envio, webhook, fallback de notificação), todos cobertos por teste unitário (ver `GUIA_DE_TESTES.md`, módulo `domain.whatsapp` e `domain.notification`):
 
 - `br/com/fpo/sgc/domain/whatsapp/WhatsAppWebhookController.java`
 - `br/com/fpo/sgc/domain/whatsapp/WhatsAppSignatureVerifier.java`
@@ -53,9 +53,9 @@ Os seguintes arquivos já existem no projeto e parecem ser de uma tentativa ante
 - `br/com/fpo/sgc/domain/notification/Notification.java`, `NotificationChannel.java`, `NotificationStatus.java`, `NotificationRepository.java`
 - `br/com/fpo/sgc/domain/notification/ServiceOrderNotificationListener.java`, `ServiceOrderEmailTemplate.java`
 
-### Checklist do que precisa estar implementado/correto
+### Checklist do que precisa estar implementado/correto — concluído
 
-- [ ] **Client HTTP para envio** (`WhatsAppCloudApiClient` ou equivalente dentro de `WhatsAppNotificationSender`): faz `POST https://graph.facebook.com/v22.0/{phone-number-id}/messages` com header `Authorization: Bearer {access-token}` e body no formato:
+- [x] **Client HTTP para envio** (`WhatsAppCloudApiClient` ou equivalente dentro de `WhatsAppNotificationSender`): faz `POST https://graph.facebook.com/v22.0/{phone-number-id}/messages` com header `Authorization: Bearer {access-token}` e body no formato:
   ```json
   {
     "messaging_product": "whatsapp",
@@ -65,9 +65,9 @@ Os seguintes arquivos já existem no projeto e parecem ser de uma tentativa ante
   }
   ```
   ou, para mensagens de texto livre dentro da janela de 24h de atendimento (`type: "text"`, `text.body`).
-- [ ] **Verificação do webhook (GET)**: endpoint deve responder ao `GET` que a Meta manda na configuração, comparando `hub.verify_token` com `WHATSAPP_WEBHOOK_VERIFY_TOKEN` e devolvendo `hub.challenge` em texto puro se bater.
-- [ ] **Recebimento de eventos (POST)**: endpoint deve aceitar `POST` com o payload da Meta, validar a assinatura via header `X-Hub-Signature-256` usando `WHATSAPP_APP_SECRET` (é isso que `WhatsAppSignatureVerifier` deveria fazer — conferir se está implementado corretamente com HMAC-SHA256).
-- [ ] **Parsing do payload**: o payload pode conter `entry[].changes[].value.messages[]` (mensagem recebida do cliente) ou `entry[].changes[].value.statuses[]` (atualização de status: sent/delivered/read/failed). Exemplos reais capturados durante os testes:
+- [x] **Verificação do webhook (GET)**: endpoint deve responder ao `GET` que a Meta manda na configuração, comparando `hub.verify_token` com `WHATSAPP_WEBHOOK_VERIFY_TOKEN` e devolvendo `hub.challenge` em texto puro se bater.
+- [x] **Recebimento de eventos (POST)**: endpoint deve aceitar `POST` com o payload da Meta, validar a assinatura via header `X-Hub-Signature-256` usando `WHATSAPP_APP_SECRET` (é isso que `WhatsAppSignatureVerifier` deveria fazer — conferir se está implementado corretamente com HMAC-SHA256).
+- [x] **Parsing do payload**: o payload pode conter `entry[].changes[].value.messages[]` (mensagem recebida do cliente) ou `entry[].changes[].value.statuses[]` (atualização de status: sent/delivered/read/failed). Exemplos reais capturados durante os testes:
 
   Status de entrega/erro (exemplo real, útil para os testes unitários):
   ```json
@@ -113,9 +113,9 @@ Os seguintes arquivos já existem no projeto e parecem ser de uma tentativa ante
     }]
   }
   ```
-- [ ] **Integração com `NotificationServiceImpl`**: confirmar que o fluxo tenta WhatsApp primeiro (via `WhatsAppNotificationSender`) e cai para `EmailNotificationSender` (SendGrid) em caso de falha, conforme desenhado em `notification.fallback-enabled` no `application.yml`.
-- [ ] **Tratamento de erros da API**: mapear pelo menos os erros mais comuns (token expirado, número não registrado, limite de mensagens) para logs claros — não precisa ser exaustivo para o MVP.
-- [ ] **Testes**: pelo menos um teste unitário do parsing do webhook e um da assinatura HMAC, se ainda não existirem.
+- [x] **Integração com `NotificationServiceImpl`**: confirmar que o fluxo tenta WhatsApp primeiro (via `WhatsAppNotificationSender`) e cai para `EmailNotificationSender` (SendGrid) em caso de falha, conforme desenhado em `notification.fallback-enabled` no `application.yml`.
+- [x] **Tratamento de erros da API**: mapear pelo menos os erros mais comuns (token expirado, número não registrado, limite de mensagens) para logs claros — não precisa ser exaustivo para o MVP.
+- [x] **Testes**: `WhatsAppWebhookControllerTest`, `WhatsAppSignatureVerifierTest`, `WhatsAppWebhookPayloadTest` e mais 5 classes de teste do módulo `domain.whatsapp` (ver `GUIA_DE_TESTES.md`).
 
 ## 5. Rodando localmente com webhook público (ngrok)
 
@@ -139,7 +139,5 @@ O ngrok já está instalado e autenticado na máquina (`ngrok config add-authtok
 
 ## 6. Depois de validar tudo
 
-Quando o fluxo completo estiver confirmado (envio + webhook + recebimento funcionando de ponta a ponta):
-
-1. Atualizar `PLANO_IMPLEMENTACAO_MVP.md` marcando a integração como **concluída e validada** (não só "em teste").
-2. Só então, avisar para revisarmos juntos a atualização da escrita do TCC (seção 6.6 e seção 9) refletindo o uso real da WhatsApp Cloud API em vez da Evolution API — isso deve ser feito com cuidado para manter o padrão ABNT e as citações acadêmicas já existentes no documento.
+1. ~~Atualizar `PLANO_IMPLEMENTACAO_MVP.md` marcando a integração como **concluída e validada**~~ — feito (seção 0 e 7.4).
+2. **Ainda pendente**: revisar a escrita do TCC (seção 6.5.1, antiga 6.6.1) refletindo o uso real da WhatsApp Cloud API em vez da Evolution API, e removendo a frase que diz que WhatsApp/SendGrid "permanecem como etapas subsequentes do desenvolvimento" — isso deve ser feito com cuidado para manter o padrão ABNT e as citações acadêmicas já existentes no documento. Ver `DOCUMENTACAO_TECNICA_TCC.md`, seção 7, para o texto técnico já pronto que pode servir de base para essa revisão.
