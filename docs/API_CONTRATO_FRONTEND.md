@@ -1,6 +1,6 @@
 # Contrato da API — SGC API (para consumo pelo frontend)
 
-> Atualizado em 2026-10-02, a partir do código-fonte real de `../src/main/java/br/com/fpo/sgc` e das migrations `V1–V19`, e conferido contra respostas reais da API rodando (formato de paginação, filtros, CSV, RBAC, CORS). Descreve o que existe e funciona hoje no backend — sem especulação sobre funcionalidades futuras. Cobre o núcleo administrativo (Fase 1), as notificações por e-mail **e por WhatsApp** e os relatórios (RF19/RF20). Desde 2026-10-02, OS também podem nascer de uma mensagem de WhatsApp e ser consultadas por lá (RF15/RF16, ver 6.10/6.17) — o frontend vai ver essas OS misturadas nas mesmas listagens, com `channel: "WHATSAPP"`. Os quatro requisitos funcionais do WhatsApp (RF14–RF17) estão concluídos; não há endpoint novo que o frontend precise chamar por causa disso — é tudo mensagem de WhatsApp. Ver `PLANO_IMPLEMENTACAO_MVP.md` para o roadmap completo.
+> Atualizado em 2026-10-12, a partir do código-fonte real de `../src/main/java/br/com/fpo/sgc` e das migrations `V1–V19`, e conferido contra respostas reais da API rodando (formato de paginação, filtros, CSV, RBAC, CORS). Descreve o que existe e funciona hoje no backend — sem especulação sobre funcionalidades futuras. Cobre o núcleo administrativo (Fase 1), as notificações por e-mail **e por WhatsApp**, os relatórios (CSV e PDF) e o tratamento de erro endurecido em 2026-10-12 (seção 3.2). Desde 2026-10-02, OS também podem nascer de uma mensagem de WhatsApp e ser consultadas por lá (RF15/RF16, ver 6.10/6.17) — o frontend vai ver essas OS misturadas nas mesmas listagens, com `channel: "WHATSAPP"`. Os quatro requisitos funcionais do WhatsApp (RF14–RF17) estão concluídos; não há endpoint novo que o frontend precise chamar por causa disso — é tudo mensagem de WhatsApp. Ver `PLANO_IMPLEMENTACAO_MVP.md` para o roadmap completo.
 
 ## 1. Visão geral
 
@@ -105,9 +105,14 @@ Todo erro de negócio/validação/recurso-não-encontrado retorna um corpo `Prob
 | Violação de regra de negócio (`BusinessException`, ex.: duplicidade) | 400 | `.../errors/business-error` |
 | Arquivo de upload maior que o permitido | 400 | `.../errors/file-too-large` |
 | Parâmetro de rota/query com tipo inválido (data mal formatada, valor de enum inexistente) | 400 | `.../errors/invalid-parameter`, `title: "Parâmetro Inválido"`, `detail` cita o nome do parâmetro |
+| Corpo da requisição ilegível (JSON malformado, enum inválido no corpo) | 400 | `.../errors/malformed-request`, `title: "Requisição Inválida"` |
+| Violação de integridade de dados no banco (chave única/FK, ex.: duas requisições quase simultâneas criando o mesmo registro) | 400 | `.../errors/data-integrity`, `title: "Conflito de Dados"` |
 | Falha de validação de campos (`@Valid`) | 422 | `.../errors/invalid-data`, com `errors: { campo: mensagem }` adicional no corpo |
-| Sem permissão para a ação (`@PreAuthorize` reprovado) | 403 | resposta padrão do Spring Security, sem `ProblemDetail` |
-| Não autenticado / token ausente-inválido | 403 | idem |
+| Sem permissão para a ação (`@PreAuthorize` reprovado, autenticado mas sem o papel exigido) | 403 | `.../errors/access-denied`, `title: "Acesso Negado"` |
+| Não autenticado / token ausente-inválido | 403 | resposta padrão do Spring Security, sem `ProblemDetail` |
+| Qualquer outra exceção não prevista (rede de segurança final) | 500 | `.../errors/internal-error`, `title: "Erro Interno"`, `detail` genérico (nunca expõe stack trace ao cliente) |
+
+Os quatro primeiros formatos de erro (404/400/422) já existiam desde o início do projeto; os três novos (`malformed-request`, `data-integrity`, `access-denied`) e a rede de segurança genérica (`internal-error`, 500) foram adicionados em 2026-10-12 para garantir que nenhuma exceção não mapeada chegasse ao cliente como erro cru do Spring — ver `GUIA_DE_TESTES.md` e `DOCUMENTACAO_TECNICA_TCC.md` para o detalhamento.
 
 ### 3.3 Soft delete e timestamps
 
