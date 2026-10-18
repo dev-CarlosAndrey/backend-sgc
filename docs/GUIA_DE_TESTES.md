@@ -47,6 +47,8 @@ Documentados junto ao item que validam, para rastreabilidade:
 - **Exportação em PDF**: PDF baixado e inspecionado visualmente para o relatório de Ordens de Serviço (paisagem, 12 colunas) e o de bens por categoria (retrato), incluindo o fix de quebra de cabeçalho (ver `PLANO_IMPLEMENTACAO_MVP.md`, seção 7.5).
 - **Correção de bug de login**: colisão de nome de usuário entre cadastro manual e auto-criação via WhatsApp, reproduzida e corrigida contra o banco real.
 - **Integração WhatsApp via ngrok**: passo a passo de configuração local documentado em `CONFIGURACAO_WHATSAPP_CLOUD_API.md`, seção 5.
+- **Tratamento de exceções não previstas (2026-10-12)**: cada handler novo de `GlobalExceptionHandler` disparado contra a aplicação rodando, não só lido no código — CPF duplicado (antes 500 cru, agora 400 `business-error`), JSON malformado e enum inválido no corpo (400 `malformed-request`), nome de prédio duplicado sem pré-checagem no código (400 `data-integrity`) e usuário sem papel de admin acessando `/api/v1/dashboard` (403 `access-denied` com corpo, antes vazio). Dados de teste limpos (soft delete) depois da validação.
+- **Auditoria completa nos cadastros mestres (2026-10-12)**: criado, editado e inativado um funcionário e um prédio de teste contra a aplicação rodando, confirmando as 3 entradas (`CREATE`/`UPDATE`/`DELETE`) em `/api/v1/audit-logs` com `performedBy` = usuário autenticado — ver `PLANO_IMPLEMENTACAO_MVP.md`, seção 8.
 
 ## 5. O que fica fora do escopo de teste deste repositório
 
