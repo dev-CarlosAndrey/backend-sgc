@@ -44,6 +44,7 @@ Empacotar um jar executável:
 - `WHATSAPP_CLOUD_API_BASE_URL`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_BUSINESS_ACCOUNT_ID`, `WHATSAPP_WEBHOOK_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` — WhatsApp Cloud API (Meta), que **substitui** a Evolution API (removida do `application.yml`). Declaradas, mas **ainda não lidas por nenhum bean**: a integração (Fase 2) não existe.
 - `UPLOAD_DIR` — diretório de uploads (padrão `uploads`), servido em `/uploads/**`.
 - `PORT` — porta do servidor, padrão `8080`.
+- `SPRING_PROFILES_ACTIVE=demo` — carrega a massa de demonstração (`db/demo/demo_data.sql`, via `common.config.DemoDataSeeder`) uma única vez. Não é migração do Flyway; ao mudar o schema, confira se o script ainda é compatível.
 
 `spring.jpa.hibernate.ddl-auto` está como `validate` — o mapeamento das entidades JPA precisa já corresponder ao schema gerado pelas migrações do Flyway. Mudanças de schema devem passar por uma nova migração do Flyway, e não por `ddl-auto`.
 

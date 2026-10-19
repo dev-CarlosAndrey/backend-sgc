@@ -39,6 +39,22 @@ O Flyway roda automaticamente na inicialização da aplicação (comportamento p
 
 **Checklist pós-primeira-subida**: trocar a senha do usuário `admin` antes de qualquer uso real ou demonstração exposta publicamente.
 
+### 4.1 Dados de demonstração (apresentação)
+
+Para a banca, existe uma massa de dados fictícia em `src/main/resources/db/demo/demo_data.sql`. Ela **não** é migração do Flyway: só é carregada pelo `DemoDataSeeder` quando a aplicação sobe com o perfil `demo`:
+
+```
+SPRING_PROFILES_ACTIVE=demo ./mvnw spring-boot:run
+```
+
+- Roda uma única vez: se a empresa de demonstração (CNPJ `11.222.333/0001-81`) já existe, não faz nada. Pode deixar o perfil ligado em todas as subidas.
+- Convive com dados já cadastrados (nomes de setor, tombamentos e CNPJ próprios), mas o ideal para a apresentação é um banco limpo.
+- Conteúdo: empresa "Faculdade Princesa do Oeste (Demonstração)", 2 prédios, 9 setores (ex.: `Biblioteca`, `Laboratório de Informática 1`), 25 bens (`DEMO-001` a `DEMO-025`) e 52 OS dos últimos ~6 meses, com histórico de status, auditoria e notificações. As datas são relativas ao dia da carga, então o dashboard e o relatório mensal sempre mostram movimento recente.
+- Usuários (senha `Demo@123`): técnicos `Marcos Lima` e `Rafael Souza`; solicitantes do painel `Helena Duarte`, `Paulo Mendes` e `Juliana Rocha`; solicitantes do WhatsApp `Fernanda Alves`, `Lucas Martins`, `Beatriz Nunes` e `Tiago Ramos` (telefones fictícios `55889000003xx`).
+- Para testar o chatbot ao vivo, use um setor/bem do seed: `Setor: Biblioteca` / `Bem: DEMO-022` / `Problema: ...`.
+- Os números são **fictícios**: servem para demonstrar o sistema, não como resultado de pesquisa no texto do TCC.
+- Para recarregar do zero: apagar e recriar o banco e subir de novo com o perfil `demo`.
+
 ## 5. Rodando a aplicação
 
 ### 5.1 Desenvolvimento

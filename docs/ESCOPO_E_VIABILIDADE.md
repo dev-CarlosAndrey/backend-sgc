@@ -31,7 +31,6 @@ Uma pesquisa de campo conduzida junto a 13 respondentes (14 questões) confirmou
 
 - Baixa/desfazimento patrimonial formal (motivo, data, responsável) — hoje coberta apenas pelo soft delete genérico do sistema.
 - Health-check automatizado da integração de notificação (badge "WhatsApp: operacional/degradado" no painel).
-- Massa de dados de demonstração (*seed*) além do usuário administrador de bootstrap.
 - Máquina de estados de conversa (sessão) no chatbot do WhatsApp — decisão deliberada de manter cada mensagem interpretada isoladamente, para simplicidade de uso (ver `PLANO_IMPLEMENTACAO_MVP.md`, seção 6).
 
 Essas exclusões estão registradas para que a banca entenda que são decisões de escopo conscientes, não lacunas não percebidas (ver também `DOCUMENTACAO_TECNICA_TCC.md`, seção 9, para o detalhamento técnico de cada limitação).

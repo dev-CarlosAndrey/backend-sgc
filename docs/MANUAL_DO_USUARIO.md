@@ -18,7 +18,7 @@ O SGC tem três perfis de acesso, definidos no cadastro do usuário:
 2. Informe o **nome de usuário** (não é o e-mail — o login usa o campo *Nome* do cadastro) e a senha.
 3. Em caso de erro "usuário ou senha incorretos" mesmo com os dados certos, confirme que está digitando o **nome de usuário**, não o e-mail.
 
-> Ambiente de demonstração: existe um usuário administrador de inicialização (`admin` / `Admin@123`, criado pela migração `V16`). **Troque essa senha antes de qualquer uso real.**
+> Ambiente de demonstração: existe um usuário administrador de inicialização (`admin` / `Admin@123`, criado pela migração `V16`). **Troque essa senha antes de qualquer uso real.** Com os dados de demonstração carregados (perfil `demo`, ver `GUIA_DE_IMPLANTACAO.md`, seção 4.1), também existem os técnicos `Marcos Lima` e `Rafael Souza` e os solicitantes `Helena Duarte`, `Paulo Mendes` e `Juliana Rocha`, todos com a senha `Demo@123`.
 
 ## 3. Controle patrimonial (Administrador)
 
