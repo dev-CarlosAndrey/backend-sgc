@@ -1,6 +1,6 @@
 # Contrato da API — SGC API (para consumo pelo frontend)
 
-> Atualizado em 2026-10-18 (corpo de `PATCH /service-orders/{id}/resolve` documentado como `text/plain`, ver 6.10; antes, 2026-10-12), a partir do código-fonte real de `../src/main/java/br/com/fpo/sgc` e das migrations `V1–V19`, e conferido contra respostas reais da API rodando (formato de paginação, filtros, CSV, RBAC, CORS). Descreve o que existe e funciona hoje no backend — sem especulação sobre funcionalidades futuras. Cobre o núcleo administrativo (Fase 1), as notificações por e-mail **e por WhatsApp**, os relatórios (CSV e PDF) e o tratamento de erro endurecido em 2026-10-12 (seção 3.2). Desde 2026-10-02, OS também podem nascer de uma mensagem de WhatsApp e ser consultadas por lá (RF15/RF16, ver 6.10/6.17) — o frontend vai ver essas OS misturadas nas mesmas listagens, com `channel: "WHATSAPP"`. Os quatro requisitos funcionais do WhatsApp (RF14–RF17) estão concluídos; não há endpoint novo que o frontend precise chamar por causa disso — é tudo mensagem de WhatsApp. Ver `PLANO_IMPLEMENTACAO_MVP.md` para o roadmap completo.
+> Atualizado em 2026-10-18 (busca `q` e filtros opcionais nas listagens, ver 3.1; corpo de `PATCH /service-orders/{id}/resolve` documentado como `text/plain`, ver 6.10; antes, 2026-10-12), a partir do código-fonte real de `../src/main/java/br/com/fpo/sgc` e das migrations `V1–V19`, e conferido contra respostas reais da API rodando (formato de paginação, filtros, CSV, RBAC, CORS). Descreve o que existe e funciona hoje no backend — sem especulação sobre funcionalidades futuras. Cobre o núcleo administrativo (Fase 1), as notificações por e-mail **e por WhatsApp**, os relatórios (CSV e PDF) e o tratamento de erro endurecido em 2026-10-12 (seção 3.2). Desde 2026-10-02, OS também podem nascer de uma mensagem de WhatsApp e ser consultadas por lá (RF15/RF16, ver 6.10/6.17) — o frontend vai ver essas OS misturadas nas mesmas listagens, com `channel: "WHATSAPP"`. Os quatro requisitos funcionais do WhatsApp (RF14–RF17) estão concluídos; não há endpoint novo que o frontend precise chamar por causa disso — é tudo mensagem de WhatsApp. Ver `PLANO_IMPLEMENTACAO_MVP.md` para o roadmap completo.
 
 ## 1. Visão geral
 
@@ -83,6 +83,12 @@ Endpoints de listagem aceitam os parâmetros padrão do Spring Data (`?page=0&si
 
 Não existem `first`, `last`, `numberOfElements`, `sort` nem `empty` — se precisar, derive: `last = page.number + 1 >= page.totalPages`, `empty = content.length === 0`. `number` é o índice da página, começando em **0**.
 
+**Busca e filtros nas listagens** (desde 2026-10-18): os `GET /` de listagem de usuários, setores, funcionários, bens, categorias, movimentações, ordens de serviço, marcas, materiais, produtos e log de auditoria aceitam, além de `page`/`size`/`sort`, filtros opcionais por query string, todos combináveis entre si (os de cada módulo estão na tabela do módulo, seção 6):
+- `q` — busca por texto livre: "contém", sem diferenciar maiúsculas/minúsculas, nos campos indicados em cada módulo. `%` e `_` são buscados literalmente (não são curingas). Vazio ou ausente = sem filtro.
+- Filtros por id (`sectorId`, `categoryId`, `destinationSectorId`) e por enum (`status`, `role`, `channel`). Valor de enum inexistente → **400** (`Parâmetro Inválido`), como nos demais parâmetros (seção 3.2).
+
+Sem nenhum filtro, a listagem continua igual à de antes. Ex.: `GET /api/v1/assets?q=notebook&status=IN_USE&sectorId=3&page=0&size=10&sort=name,asc`. As rotas antigas de filtro único (`/assets/status/{status}`, `/service-orders/status/{status}` etc.) continuam existindo.
+
 Tamanho padrão de página (quando `size` não é enviado): **10** em usuários, bens e ordens de serviço; **20** em todos os demais (empresas, prédios, setores, funcionários, categorias, movimentações, marcas, materiais, produtos e log de auditoria). O campo de ordenação padrão varia por endpoint (documentado por módulo abaixo).
 
 ### 3.2 Formato de erro (RFC 7807 `ProblemDetail`)
@@ -118,7 +124,7 @@ Os quatro primeiros formatos de erro (404/400/422) já existiam desde o início 
 
 - Nenhum recurso é excluído fisicamente. `DELETE` marca `active = false`.
 - Toda entidade tem `active` (boolean) e `createdAt` (ISO-8601 UTC) nos DTOs de resposta; algumas também expõem `updatedAt` internamente, mas isso não é enviado no DTO salvo indicado abaixo.
-- Listagens (`findAll`, `findBy...`) **só retornam registros com `active = true`**. Um recurso inativado deixa de aparecer nas listas, mas `GET /{id}` direto ainda pode retorná-lo (não há filtro de `active` na busca por ID).
+- Listagens (`findAll`, `findBy...`) **só retornam registros com `active = true`** — exceto `GET /employees`, que sem o filtro `active` lista ativos e inativos (ver 6.6). Um recurso inativado deixa de aparecer nas listas, mas `GET /{id}` direto ainda pode retorná-lo (não há filtro de `active` na busca por ID).
 
 ### 3.4 Upload de arquivos
 
@@ -174,7 +180,7 @@ Nas tabelas abaixo, **Auth** indica o requisito de acesso: `Autenticado` (qualqu
 |---|---|---|---|
 | POST | `/` | ADMIN | Cria usuário. Body: `UserRequestDTO` |
 | GET | `/{id}` | Autenticado | Busca por ID |
-| GET | `/` | Autenticado | Lista paginada (`size=10`, `sort=name`) |
+| GET | `/` | Autenticado | Lista paginada (`size=10`, `sort=name`). Filtros opcionais: `q` (nome ou e-mail), `role` (`Role`) |
 | PUT | `/{id}` | ADMIN | Atualiza. Body: `UserRequestDTO` |
 | DELETE | `/{id}` | ADMIN | Soft delete |
 
@@ -279,7 +285,7 @@ Nas tabelas abaixo, **Auth** indica o requisito de acesso: `Autenticado` (qualqu
 | Método | Path | Auth | Descrição |
 |---|---|---|---|
 | POST | `/` | ADMIN | Cria setor. Body: `SectorRequestDTO` |
-| GET | `/` | Autenticado | Lista paginada |
+| GET | `/` | Autenticado | Lista paginada. Filtro opcional: `q` (nome do setor, do prédio ou do responsável) |
 | GET | `/{id}` | Autenticado | Busca por ID |
 | GET | `/building/{buildingId}` | Autenticado | Lista paginada por prédio |
 | PUT | `/{id}` | ADMIN | Atualiza |
@@ -318,7 +324,7 @@ Nas tabelas abaixo, **Auth** indica o requisito de acesso: `Autenticado` (qualqu
 | Método | Path | Auth | Descrição |
 |---|---|---|---|
 | POST | `/` | ADMIN | Cria funcionário. Body: `EmployeeRequestDTO` |
-| GET | `/` | Autenticado | Lista paginada (`size=20`) |
+| GET | `/` | Autenticado | Lista paginada (`size=20`). Filtros opcionais: `q` (nome, CPF ou matrícula), `sectorId`, `active` (`true`/`false`). ⚠️ Sem `active`, lista **ativos e inativos** (exceção à regra da seção 3.3) |
 | GET | `/{id}` | Autenticado | Busca por ID |
 | PUT | `/{id}` | ADMIN | Atualiza |
 | DELETE | `/{id}` | ADMIN | Soft delete |
@@ -365,7 +371,7 @@ Nas tabelas abaixo, **Auth** indica o requisito de acesso: `Autenticado` (qualqu
 | POST | `/` | ADMIN | Cria bem. Body: `AssetRequestDTO` |
 | GET | `/{id}` | Autenticado | Busca por ID |
 | GET | `/tag/{tagNumber}` | Autenticado | Busca por tombamento |
-| GET | `/` | Autenticado | Lista paginada (`size=10`, `sort=name`) |
+| GET | `/` | Autenticado | Lista paginada (`size=10`, `sort=name`). Filtros opcionais e combináveis: `q` (tombamento, nome, modelo ou nº de série), `status` (`AssetStatus`), `sectorId`, `categoryId` |
 | GET | `/sector/{sectorId}` | Autenticado | Lista paginada por setor |
 | GET | `/status/{status}` | Autenticado | Lista paginada por status (`AssetStatus`) |
 | GET | `/category/{categoryId}` | Autenticado | Lista paginada por categoria |
@@ -420,7 +426,7 @@ Nas tabelas abaixo, **Auth** indica o requisito de acesso: `Autenticado` (qualqu
 | Método | Path | Auth | Descrição |
 |---|---|---|---|
 | POST | `/` | ADMIN | Cria categoria. Body: `AssetCategoryRequestDTO` |
-| GET | `/` | Autenticado | Lista paginada (`size=20`, `sort=name`) |
+| GET | `/` | Autenticado | Lista paginada (`size=20`, `sort=name`). Filtro opcional: `q` (nome ou descrição) |
 | GET | `/{id}` | Autenticado | Busca por ID |
 | PUT | `/{id}` | ADMIN | Atualiza |
 | DELETE | `/{id}` | ADMIN | Soft delete |
@@ -452,7 +458,7 @@ Histórico de transferência de um bem entre setores (não é o mesmo que histó
 | Método | Path | Auth | Descrição |
 |---|---|---|---|
 | POST | `/` | ADMIN | Registra movimentação. Body: `AssetMovementRequestDTO` |
-| GET | `/` | Autenticado | Lista paginada (`size=20`) |
+| GET | `/` | Autenticado | Lista paginada (`size=20`, `sort=movementDate DESC`). Filtros opcionais: `q` (tombamento/nome do bem, setor de origem ou de destino), `destinationSectorId` |
 | GET | `/asset/{assetId}` | Autenticado | Lista paginada por bem |
 
 **`AssetMovementRequestDTO`:**
@@ -487,7 +493,7 @@ O setor de origem é inferido automaticamente a partir do setor atual do bem no 
 |---|---|---|---|
 | POST | `/` | Autenticado | Abre chamado. Body: `ServiceOrderRequestDTO` |
 | GET | `/{id}` | Autenticado | Busca por ID |
-| GET | `/` | Autenticado | Lista paginada (`size=10`, `sort=createdAt`) |
+| GET | `/` | Autenticado | Lista paginada (`size=10`, `sort=createdAt` — envie `sort=createdAt,desc` para as mais recentes primeiro). Filtros opcionais e combináveis: `q` (título, nome do solicitante ou do setor), `status` (`ServiceOrderStatus`), `channel` (`ServiceOrderChannel`) |
 | GET | `/asset/{assetId}` | Autenticado | **Histórico de manutenção do bem** — todas as OS vinculadas a ele |
 | GET | `/status/{status}` | Autenticado | Lista paginada por status |
 | GET | `/requester/{requesterId}` | Autenticado | Lista paginada por solicitante |
@@ -579,7 +585,7 @@ Regras (violação → **400**): `IN_PROGRESS` exige técnico já atribuído; `C
 |---|---|---|---|
 | POST | `/` | ADMIN | Cria marca |
 | GET | `/{id}` | Autenticado | Busca por ID |
-| GET | `/` | Autenticado | Lista paginada |
+| GET | `/` | Autenticado | Lista paginada. Filtro opcional: `q` (nome) |
 | PUT | `/{id}` | ADMIN | Atualiza |
 | DELETE | `/{id}` | ADMIN | Soft delete |
 
@@ -591,7 +597,7 @@ Regras (violação → **400**): `IN_PROGRESS` exige técnico já atribuído; `C
 | Método | Path | Auth | Descrição |
 |---|---|---|---|
 | POST | `/` | ADMIN | Cria material |
-| GET | `/` | Autenticado | Lista paginada (`size=20`) |
+| GET | `/` | Autenticado | Lista paginada (`size=20`). Filtro opcional: `q` (nome ou categoria) |
 | GET | `/{id}` | Autenticado | Busca por ID |
 | PUT | `/{id}` | ADMIN | Atualiza |
 | DELETE | `/{id}` | ADMIN | Soft delete |
@@ -612,7 +618,7 @@ Catálogo auxiliar que combina `Brand` + `Material`. **Não vinculado a `Asset`*
 | Método | Path | Auth | Descrição |
 |---|---|---|---|
 | POST | `/` | ADMIN | Cria produto |
-| GET | `/` | Autenticado | Lista paginada (`size=20`) |
+| GET | `/` | Autenticado | Lista paginada (`size=20`). Filtro opcional: `q` (nome do produto, da marca, do material ou categoria do material) |
 | GET | `/{id}` | Autenticado | Busca por ID |
 | PUT | `/{id}` | ADMIN | Atualiza |
 | DELETE | `/{id}` | ADMIN | Soft delete |
@@ -643,7 +649,7 @@ Somente leitura. Registrado automaticamente pelo backend em toda operação de c
 
 | Método | Path | Auth | Descrição |
 |---|---|---|---|
-| GET | `/` | Autenticado | Lista paginada (`size=20`, `sort=createdAt DESC`) |
+| GET | `/` | Autenticado | Lista paginada (`size=20`, `sort=createdAt DESC`). Filtro opcional: `q` (entidade, ação, responsável ou detalhes) |
 | GET | `/{entityName}/{entityId}` | Autenticado | Histórico de um recurso específico (ex.: `/Asset/5`) |
 
 **`AuditLogResponseDTO`:**
