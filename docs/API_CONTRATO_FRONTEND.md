@@ -707,7 +707,9 @@ Sem `companyId`, os indicadores são globais (todas as empresas); com `companyId
 | GET | `/assets/critical` | Bens críticos (estado ruim e/ou manutenção recorrente) |
 | GET | `/movements` | Resumo das movimentações de bens no período |
 | GET | `/audit` | Resumo do log de auditoria (por entidade, ação e usuário) |
-| GET | `<qualquer um acima>/export` | Mesmo relatório em **CSV** (`os-por-mes.csv`, `tempo-por-etapa.csv`, `patrimonio.csv`, `bens-criticos.csv`, `movimentacoes.csv`, `auditoria.csv`) |
+| GET | `/service-orders/channels` | OS por canal de abertura (painel × WhatsApp) e evolução mensal |
+| GET | `/notifications` | Entrega das notificações: sucesso por canal, desfecho, taxa de fallback e erros |
+| GET | `<qualquer um acima>/export` | Mesmo relatório em **CSV** (`os-por-mes.csv`, `tempo-por-etapa.csv`, `patrimonio.csv`, `bens-criticos.csv`, `movimentacoes.csv`, `auditoria.csv`, `os-por-canal.csv`, `entrega-notificacoes.csv`) |
 | GET | `<qualquer um acima>/export/pdf` | Mesmo relatório em **PDF** (mesmos nomes de arquivo, extensão `.pdf`) |
 
 Filtros de `/service-orders` e `/service-orders/export` (todos opcionais; sem nenhum, cobre todas as OS ativas): `from`, `to` (datas `yyyy-MM-dd` inclusivas), `field` (`OPENED` padrão | `CLOSED`, indica a qual data o período se aplica), `technicianId`, `status`, `companyId`. `from` > `to` → 400.
@@ -814,6 +816,33 @@ Depreciação **linear, sem valor residual, por meses completos**, com a mesma v
 ```
 
 **`GET /reports/audit`** — `from`, `to`, `entityName`, `performedBy` (igualdade exata). Resumo com `total`, `byEntity`, `byAction`, `byUser` (`{key,total}`, maior primeiro; usuário nulo aparece como "Sem usuário"). O CSV traz os **10.000 eventos mais recentes** do filtro.
+
+**`GET /reports/service-orders/channels`** — `from`, `to` (aplicados à abertura da OS), `companyId`. Desde 2026-10-19.
+```json
+{ "total": 52,
+  "channels": [ { "channel": "PANEL", "total": 23, "sharePercent": 44.2, "resolved": 19, "cancelled": 1, "pending": 3, "avgResolutionHours": 80.7 },
+                { "channel": "WHATSAPP", "total": 29, "sharePercent": 55.8, "resolved": 24, "cancelled": 2, "pending": 3, "avgResolutionHours": 37.6 } ],
+  "months": [ { "month": "2026-05", "panel": 2, "whatsapp": 5, "whatsappPercent": 71.4 } ] }
+```
+- `channels` traz sempre os dois canais (`PANEL`, `WHATSAPP`), zerados inclusive. `pending` = `OPEN` + `IN_PROGRESS`. `avgResolutionHours` considera só OS `RESOLVED` (`null` se não houver). Percentuais com 1 casa; `null` quando não há OS no período.
+- `months`: só meses com OS abertas, em ordem cronológica (fuso `America/Fortaleza`). OS anteriores à coluna `channel` contam como `PANEL`.
+
+**`GET /reports/notifications`** — `from`, `to` (aplicados à data de cada tentativa), `companyId` (empresa do setor da OS). Desde 2026-10-19.
+```json
+{ "totalAttempts": 642, "totalNotifications": 237, "delivered": 237,
+  "deliveryRatePercent": 100.0, "fallbackRatePercent": 67.5,
+  "channels": [ { "channel": "WHATSAPP", "attempts": 470, "sent": 65, "failed": 405, "successRatePercent": 13.8 },
+                { "channel": "EMAIL", "attempts": 172, "sent": 172, "failed": 0, "successRatePercent": 100.0 } ],
+  "byOutcome": [ { "key": "WHATSAPP_FIRST_ATTEMPT", "total": 65 }, { "key": "WHATSAPP_AFTER_RETRY", "total": 0 },
+                 { "key": "EMAIL_FALLBACK", "total": 135 }, { "key": "EMAIL_ONLY", "total": 37 }, { "key": "NOT_DELIVERED", "total": 0 } ],
+  "topErrors": [ { "key": "(#131047) Re-engagement message: More than 24 hours have passed since the recipient last replied to the sender number.", "total": 405 } ] }
+```
+- **Tentativa** = uma linha de `tb_notifications` (um envio em um canal). **Notificação** = um destinatário em um evento da OS, com todas as suas tentativas (WhatsApp com retentativas e, se falhar, e-mail).
+- `channels`: tentativas por canal; `successRatePercent` = `sent` / `attempts`.
+- `byOutcome` (sempre os 5): entregue por WhatsApp na 1ª tentativa, por WhatsApp após retentativa, por e-mail depois de o WhatsApp falhar (`EMAIL_FALLBACK`), só por e-mail porque o WhatsApp não se aplicava (`EMAIL_ONLY`: destinatário sem telefone ou canal não configurado) ou `NOT_DELIVERED`.
+- `deliveryRatePercent` = notificações entregues / total. `fallbackRatePercent` = `EMAIL_FALLBACK` / notificações que tentaram WhatsApp.
+- `topErrors`: até 5 mensagens de erro mais frequentes; erros JSON da Graph API/SendGrid são reduzidos ao campo `message` (máx. 150 caracteres).
+- Taxas com 1 casa; `null` quando não há base (zero notificações).
 
 **CSV** (`/export`): resposta `text/csv; charset=UTF-8` com `Content-Disposition: attachment` (`bens-por-categoria.csv` / `ordens-de-servico.csv`). Formato pensado para o Excel pt-BR: separador `;`, UTF-8 com BOM, cabeçalhos e rótulos de status em português, datas `dd/MM/yyyy HH:mm` (fuso local), custo com vírgula (`25,50`). Textos que começam com `=`, `+`, `-` ou `@` recebem um apóstrofo na frente (proteção contra injeção de fórmulas). Para baixar no frontend, use `fetch` com o header `Authorization` e trate a resposta como `blob` (um `<a href>` simples não envia o token).
 

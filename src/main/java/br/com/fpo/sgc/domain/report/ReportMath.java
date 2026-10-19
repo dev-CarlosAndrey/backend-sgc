@@ -23,6 +23,11 @@ final class ReportMath {
         return round1(durations.stream().mapToLong(Duration::toMinutes).average().orElse(0) / 60.0);
     }
 
+    // Percentual com 1 casa; nulo quando o total é zero (não há base para a taxa).
+    static Double percent(long part, long total) {
+        return total == 0 ? null : round1(part * 100.0 / total);
+    }
+
     static String money(BigDecimal value) {
         return value.setScale(2, RoundingMode.HALF_UP).toPlainString().replace('.', ',');
     }

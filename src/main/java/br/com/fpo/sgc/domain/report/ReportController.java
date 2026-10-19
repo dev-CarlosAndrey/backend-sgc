@@ -8,9 +8,11 @@ import br.com.fpo.sgc.domain.report.ReportFilters.Patrimony;
 import br.com.fpo.sgc.domain.report.ReportFilters.Period;
 import br.com.fpo.sgc.domain.report.dto.AssetReportDTO;
 import br.com.fpo.sgc.domain.report.dto.AuditReportDTO;
+import br.com.fpo.sgc.domain.report.dto.ChannelReportDTO;
 import br.com.fpo.sgc.domain.report.dto.CriticalAssetsReportDTO;
 import br.com.fpo.sgc.domain.report.dto.MonthlyServiceOrdersReportDTO;
 import br.com.fpo.sgc.domain.report.dto.MovementReportDTO;
+import br.com.fpo.sgc.domain.report.dto.NotificationReportDTO;
 import br.com.fpo.sgc.domain.report.dto.PatrimonyReportDTO;
 import br.com.fpo.sgc.domain.report.dto.StageTimeReportDTO;
 import br.com.fpo.sgc.domain.report.dto.MaintenanceCostReportDTO;
@@ -43,6 +45,7 @@ public class ReportController {
     private final ServiceOrderInsightsService serviceOrderInsights;
     private final AssetInsightsService assetInsights;
     private final TraceabilityReportService traceability;
+    private final ChannelInsightsService channelInsights;
 
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/assets")
@@ -196,6 +199,62 @@ public class ReportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long companyId) {
         return pdf("tempo-por-etapa.pdf", serviceOrderInsights.stageTimesPdf(new Period(from, to, companyId)));
+    }
+
+    // OS por canal de abertura (painel × WhatsApp), pela data de abertura, com evolução mês a mês.
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/service-orders/channels")
+    public ResponseEntity<ChannelReportDTO> serviceOrderChannels(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long companyId) {
+        return ResponseEntity.ok(channelInsights.channels(new Period(from, to, companyId)));
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/service-orders/channels/export")
+    public ResponseEntity<byte[]> exportServiceOrderChannels(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long companyId) {
+        return csv("os-por-canal.csv", channelInsights.channelsCsv(new Period(from, to, companyId)));
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/service-orders/channels/export/pdf")
+    public ResponseEntity<byte[]> exportServiceOrderChannelsPdf(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long companyId) {
+        return pdf("os-por-canal.pdf", channelInsights.channelsPdf(new Period(from, to, companyId)));
+    }
+
+    // Entrega das notificações (tb_notifications) no período: sucesso por canal, desfecho e taxa de fallback.
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/notifications")
+    public ResponseEntity<NotificationReportDTO> notifications(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long companyId) {
+        return ResponseEntity.ok(channelInsights.notifications(new Period(from, to, companyId)));
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/notifications/export")
+    public ResponseEntity<byte[]> exportNotifications(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long companyId) {
+        return csv("entrega-notificacoes.csv", channelInsights.notificationsCsv(new Period(from, to, companyId)));
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/notifications/export/pdf")
+    public ResponseEntity<byte[]> exportNotificationsPdf(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long companyId) {
+        return pdf("entrega-notificacoes.pdf", channelInsights.notificationsPdf(new Period(from, to, companyId)));
     }
 
     // Depreciação linear em usefulLifeYears (padrão 10) na data asOf (padrão hoje); groupBy = CATEGORY (padrão) | SECTOR.
