@@ -1,6 +1,6 @@
 # Contrato da API — SGC API (para consumo pelo frontend)
 
-> Atualizado em 2026-10-12, a partir do código-fonte real de `../src/main/java/br/com/fpo/sgc` e das migrations `V1–V19`, e conferido contra respostas reais da API rodando (formato de paginação, filtros, CSV, RBAC, CORS). Descreve o que existe e funciona hoje no backend — sem especulação sobre funcionalidades futuras. Cobre o núcleo administrativo (Fase 1), as notificações por e-mail **e por WhatsApp**, os relatórios (CSV e PDF) e o tratamento de erro endurecido em 2026-10-12 (seção 3.2). Desde 2026-10-02, OS também podem nascer de uma mensagem de WhatsApp e ser consultadas por lá (RF15/RF16, ver 6.10/6.17) — o frontend vai ver essas OS misturadas nas mesmas listagens, com `channel: "WHATSAPP"`. Os quatro requisitos funcionais do WhatsApp (RF14–RF17) estão concluídos; não há endpoint novo que o frontend precise chamar por causa disso — é tudo mensagem de WhatsApp. Ver `PLANO_IMPLEMENTACAO_MVP.md` para o roadmap completo.
+> Atualizado em 2026-10-18 (corpo de `PATCH /service-orders/{id}/resolve` documentado como `text/plain`, ver 6.10; antes, 2026-10-12), a partir do código-fonte real de `../src/main/java/br/com/fpo/sgc` e das migrations `V1–V19`, e conferido contra respostas reais da API rodando (formato de paginação, filtros, CSV, RBAC, CORS). Descreve o que existe e funciona hoje no backend — sem especulação sobre funcionalidades futuras. Cobre o núcleo administrativo (Fase 1), as notificações por e-mail **e por WhatsApp**, os relatórios (CSV e PDF) e o tratamento de erro endurecido em 2026-10-12 (seção 3.2). Desde 2026-10-02, OS também podem nascer de uma mensagem de WhatsApp e ser consultadas por lá (RF15/RF16, ver 6.10/6.17) — o frontend vai ver essas OS misturadas nas mesmas listagens, com `channel: "WHATSAPP"`. Os quatro requisitos funcionais do WhatsApp (RF14–RF17) estão concluídos; não há endpoint novo que o frontend precise chamar por causa disso — é tudo mensagem de WhatsApp. Ver `PLANO_IMPLEMENTACAO_MVP.md` para o roadmap completo.
 
 ## 1. Visão geral
 
@@ -515,11 +515,12 @@ O setor de origem é inferido automaticamente a partir do setor atual do bem no 
 **`PATCH /{id}/resolve`** — corpo e query param, não um DTO único:
 ```
 PATCH /api/v1/service-orders/5/resolve?cost=150.75
-Content-Type: application/json
+Content-Type: text/plain
 
-"Laudo técnico / solução aplicada em texto livre"
+Laudo técnico / solução aplicada em texto livre
+(pode ter várias linhas)
 ```
-O corpo é uma **string JSON pura** (não um objeto `{ solutionDetails: ... }`), e `cost` é um **query param opcional** (`BigDecimal`) — se omitido, a OS é resolvida sem custo registrado. Retorna 400 (`BusinessException`) se a OS já estiver `RESOLVED` **ou `CANCELLED`** (uma OS cancelada não pode ser resolvida).
+O corpo é o **laudo em texto puro** (`Content-Type: text/plain`), sem aspas e sem objeto `{ solutionDetails: ... }`. O controller recebe `@RequestBody String` e grava o corpo exatamente como chega. Por isso **não envie como string JSON** (`"..."` com `application/json`): as aspas e os `\n` escapados seriam salvos literalmente no laudo. No axios, passe a string com `headers: { 'Content-Type': 'text/plain' }`. `cost` é um **query param opcional** (`BigDecimal`) — se omitido, a OS é resolvida sem custo registrado. Retorna 400 (`BusinessException`) se a OS já estiver `RESOLVED` **ou `CANCELLED`** (uma OS cancelada não pode ser resolvida).
 
 **`ServiceOrderResponseDTO`:**
 ```json
