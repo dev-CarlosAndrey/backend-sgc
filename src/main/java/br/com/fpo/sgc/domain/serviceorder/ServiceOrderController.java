@@ -37,8 +37,11 @@ public class ServiceOrderController {
 
     @GetMapping
     public ResponseEntity<Page<ServiceOrderResponseDTO>> findAll(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) ServiceOrderStatus status,
+            @RequestParam(required = false) ServiceOrderChannel channel,
             @PageableDefault(size = 10, sort = "createdAt") Pageable pageable) {
-        return ResponseEntity.ok(serviceOrderService.findAll(pageable));
+        return ResponseEntity.ok(serviceOrderService.findAll(q, status, channel, pageable));
     }
 
     @GetMapping("/asset/{assetId}")

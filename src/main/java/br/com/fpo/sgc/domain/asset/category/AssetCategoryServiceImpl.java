@@ -1,6 +1,7 @@
 package br.com.fpo.sgc.domain.asset.category;
 
 import br.com.fpo.sgc.common.exception.BusinessException;
+import br.com.fpo.sgc.common.util.SearchTerm;
 import br.com.fpo.sgc.domain.asset.category.dto.AssetCategoryRequestDTO;
 import br.com.fpo.sgc.domain.asset.category.dto.AssetCategoryResponseDTO;
 import br.com.fpo.sgc.domain.asset.category.mapper.AssetCategoryMapper;
@@ -52,8 +53,8 @@ public class AssetCategoryServiceImpl implements AssetCategoryService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<AssetCategoryResponseDTO> findAll(Pageable pageable) {
-        return assetCategoryRepository.findByActiveTrue(pageable)
+    public Page<AssetCategoryResponseDTO> findAll(String q, Pageable pageable) {
+        return assetCategoryRepository.search(SearchTerm.toLikePattern(q), pageable)
                 .map(assetCategoryMapper::toDTO);
     }
 

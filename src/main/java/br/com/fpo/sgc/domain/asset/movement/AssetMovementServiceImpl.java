@@ -1,6 +1,7 @@
 package br.com.fpo.sgc.domain.asset.movement;
 
 import br.com.fpo.sgc.common.exception.BusinessException;
+import br.com.fpo.sgc.common.util.SearchTerm;
 import br.com.fpo.sgc.domain.asset.Asset;
 import br.com.fpo.sgc.domain.asset.AssetRepository;
 import br.com.fpo.sgc.domain.asset.movement.dto.AssetMovementRequestDTO;
@@ -63,8 +64,8 @@ public class AssetMovementServiceImpl implements AssetMovementService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<AssetMovementResponseDTO> findAll(Pageable pageable) {
-        return movementRepository.findByActiveTrueOrderByMovementDateDesc(pageable)
+    public Page<AssetMovementResponseDTO> findAll(String q, Long destinationSectorId, Pageable pageable) {
+        return movementRepository.search(SearchTerm.toLikePattern(q), destinationSectorId, pageable)
                 .map(movementMapper::toDTO);
     }
 

@@ -1,6 +1,7 @@
 package br.com.fpo.sgc.domain.brand;
 
 import br.com.fpo.sgc.common.exception.BusinessException;
+import br.com.fpo.sgc.common.util.SearchTerm;
 import br.com.fpo.sgc.domain.audit.AuditLogService;
 import br.com.fpo.sgc.domain.brand.dto.BrandRequestDTO;
 import br.com.fpo.sgc.domain.brand.dto.BrandResponseDTO;
@@ -53,8 +54,8 @@ public class BrandServiceImpl implements BrandService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<BrandResponseDTO> findAll(Pageable pageable) {
-        return brandRepository.findByActiveTrue(pageable)
+    public Page<BrandResponseDTO> findAll(String q, Pageable pageable) {
+        return brandRepository.search(SearchTerm.toLikePattern(q), pageable)
                 .map(BrandResponseDTO::fromEntity);
     }
 

@@ -33,8 +33,10 @@ public class UserController {
 
     @GetMapping
     public ResponseEntity<Page<UserResponseDTO>> findAll(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Role role,
             @PageableDefault(size = 10, sort = "name") Pageable pageable) {
-        return ResponseEntity.ok(userService.findAll(pageable));
+        return ResponseEntity.ok(userService.findAll(q, role, pageable));
     }
 
     @PreAuthorize("hasRole('ADMIN')")

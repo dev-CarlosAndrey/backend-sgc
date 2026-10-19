@@ -26,8 +26,10 @@ public class SectorController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<SectorResponseDTO>> findAll(@PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(sectorService.findAll(pageable));
+    public ResponseEntity<Page<SectorResponseDTO>> findAll(
+            @RequestParam(required = false) String q,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(sectorService.findAll(q, pageable));
     }
 
     @GetMapping("/{id}")

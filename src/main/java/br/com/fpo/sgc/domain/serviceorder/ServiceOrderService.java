@@ -16,7 +16,7 @@ public interface ServiceOrderService {
     // continua fixando PANEL, usado pelo painel administrativo.
     ServiceOrderResponseDTO create(ServiceOrderRequestDTO dto, ServiceOrderChannel channel);
     ServiceOrderResponseDTO findById(Long id);
-    Page<ServiceOrderResponseDTO> findAll(Pageable pageable);
+    Page<ServiceOrderResponseDTO> findAll(String q, ServiceOrderStatus status, ServiceOrderChannel channel, Pageable pageable);
     Page<ServiceOrderResponseDTO> findByStatus(ServiceOrderStatus status, Pageable pageable);
     Page<ServiceOrderResponseDTO> findByAssetId(Long assetId, Pageable pageable);
     Page<ServiceOrderResponseDTO> findByRequesterId(Long requesterId, Pageable pageable);

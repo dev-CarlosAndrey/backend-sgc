@@ -11,7 +11,7 @@ public interface UserService {
 
     UserResponseDTO findById(Long id);
 
-    Page<UserResponseDTO> findAll(Pageable pageable);
+    Page<UserResponseDTO> findAll(String q, Role role, Pageable pageable);
 
     UserResponseDTO update(Long id, UserRequestDTO dto);
 

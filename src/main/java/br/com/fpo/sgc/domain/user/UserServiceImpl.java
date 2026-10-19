@@ -1,6 +1,7 @@
 package br.com.fpo.sgc.domain.user;
 
 import br.com.fpo.sgc.common.exception.BusinessException;
+import br.com.fpo.sgc.common.util.SearchTerm;
 import br.com.fpo.sgc.domain.audit.AuditLogService;
 import br.com.fpo.sgc.domain.user.dto.UserRequestDTO;
 import br.com.fpo.sgc.domain.user.dto.UserResponseDTO;
@@ -58,8 +59,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<UserResponseDTO> findAll(Pageable pageable) {
-        return userRepository.findByActiveTrue(pageable)
+    public Page<UserResponseDTO> findAll(String q, Role role, Pageable pageable) {
+        return userRepository.search(SearchTerm.toLikePattern(q), role, pageable)
                 .map(userMapper::toDTO);
     }
 

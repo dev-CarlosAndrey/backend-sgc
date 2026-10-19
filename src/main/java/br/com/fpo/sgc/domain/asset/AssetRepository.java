@@ -65,4 +65,22 @@ public interface AssetRepository extends JpaRepository<Asset, Long> {
             "AND (:companyId IS NULL OR a.sector.building.company.id = :companyId)")
     List<Asset> findByConservationStates(@Param("states") Collection<AssetConservationState> states,
                                          @Param("companyId") Long companyId);
+
+    // Listagem com busca e filtros opcionais (null = sem filtro). `q` já chega como padrão LIKE
+    // montado por SearchTerm.toLikePattern.
+    @Query("SELECT a FROM Asset a LEFT JOIN a.sector s LEFT JOIN a.category c " +
+            "WHERE a.active = true " +
+            "AND (:status IS NULL OR a.status = :status) " +
+            "AND (:sectorId IS NULL OR s.id = :sectorId) " +
+            "AND (:categoryId IS NULL OR c.id = :categoryId) " +
+            "AND (:q IS NULL " +
+            "OR LOWER(a.tagNumber) LIKE :q ESCAPE '!' " +
+            "OR LOWER(a.name) LIKE :q ESCAPE '!' " +
+            "OR LOWER(a.model) LIKE :q ESCAPE '!' " +
+            "OR LOWER(a.serialNumber) LIKE :q ESCAPE '!')")
+    Page<Asset> search(@Param("q") String q,
+                       @Param("status") AssetStatus status,
+                       @Param("sectorId") Long sectorId,
+                       @Param("categoryId") Long categoryId,
+                       Pageable pageable);
 }

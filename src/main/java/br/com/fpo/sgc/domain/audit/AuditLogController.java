@@ -20,8 +20,9 @@ public class AuditLogController {
 
     @GetMapping
     public ResponseEntity<Page<AuditLogResponseDTO>> findAll(
+            @RequestParam(required = false) String q,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ResponseEntity.ok(auditLogService.findAll(pageable));
+        return ResponseEntity.ok(auditLogService.findAll(q, pageable));
     }
 
     @GetMapping("/{entityName}/{entityId}")

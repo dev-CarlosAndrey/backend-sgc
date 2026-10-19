@@ -8,7 +8,7 @@ import org.springframework.data.domain.Pageable;
 public interface MaterialService {
     MaterialResponseDTO create(MaterialRequestDTO dto);
     MaterialResponseDTO findById(Long id);
-    Page<MaterialResponseDTO> findAll(Pageable pageable);
+    Page<MaterialResponseDTO> findAll(String q, Pageable pageable);
     MaterialResponseDTO update(Long id, MaterialRequestDTO dto);
     void delete(Long id);
 }

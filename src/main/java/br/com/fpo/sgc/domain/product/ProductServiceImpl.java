@@ -1,5 +1,6 @@
 package br.com.fpo.sgc.domain.product;
 
+import br.com.fpo.sgc.common.util.SearchTerm;
 import br.com.fpo.sgc.domain.audit.AuditLogService;
 import br.com.fpo.sgc.domain.brand.Brand;
 import br.com.fpo.sgc.domain.brand.BrandRepository;
@@ -59,8 +60,8 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProductResponseDTO> findAll(Pageable pageable) {
-        return productRepository.findByActiveTrue(pageable)
+    public Page<ProductResponseDTO> findAll(String q, Pageable pageable) {
+        return productRepository.search(SearchTerm.toLikePattern(q), pageable)
                 .map(productMapper::toDTO);
     }
 

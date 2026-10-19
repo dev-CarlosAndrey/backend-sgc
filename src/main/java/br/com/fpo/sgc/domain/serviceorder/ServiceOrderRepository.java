@@ -58,4 +58,19 @@ public interface ServiceOrderRepository extends JpaRepository<ServiceOrder, Long
             "WHERE so.active = true AND so.cost IS NOT NULL " +
             "AND (:companyId IS NULL OR so.sector.building.company.id = :companyId)")
     BigDecimal sumMaintenanceCostByCompanyId(@Param("companyId") Long companyId);
+
+    // Listagem com busca e filtros opcionais (null = sem filtro). `q` já chega como padrão LIKE
+    // montado por SearchTerm.toLikePattern.
+    @Query("SELECT so FROM ServiceOrder so JOIN so.requester r JOIN so.sector s " +
+            "WHERE so.active = true " +
+            "AND (:status IS NULL OR so.status = :status) " +
+            "AND (:channel IS NULL OR so.channel = :channel) " +
+            "AND (:q IS NULL " +
+            "OR LOWER(so.title) LIKE :q ESCAPE '!' " +
+            "OR LOWER(r.name) LIKE :q ESCAPE '!' " +
+            "OR LOWER(s.name) LIKE :q ESCAPE '!')")
+    Page<ServiceOrder> search(@Param("q") String q,
+                              @Param("status") ServiceOrderStatus status,
+                              @Param("channel") ServiceOrderChannel channel,
+                              Pageable pageable);
 }

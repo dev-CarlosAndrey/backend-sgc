@@ -9,7 +9,7 @@ public interface EmployeeService {
 
     EmployeeResponseDTO create(EmployeeRequestDTO dto);
 
-    Page<EmployeeResponseDTO> findAll(Pageable pageable);
+    Page<EmployeeResponseDTO> findAll(String q, Long sectorId, Boolean active, Pageable pageable);
 
     EmployeeResponseDTO findById(Long id);
 

@@ -1,5 +1,6 @@
 package br.com.fpo.sgc.domain.audit;
 
+import br.com.fpo.sgc.common.util.SearchTerm;
 import br.com.fpo.sgc.domain.audit.dto.AuditLogResponseDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -48,7 +49,7 @@ public class AuditLogServiceImpl implements AuditLogService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<AuditLogResponseDTO> findAll(Pageable pageable) {
-        return auditLogRepository.findAll(pageable).map(AuditLogResponseDTO::fromEntity);
+    public Page<AuditLogResponseDTO> findAll(String q, Pageable pageable) {
+        return auditLogRepository.search(SearchTerm.toLikePattern(q), pageable).map(AuditLogResponseDTO::fromEntity);
     }
 }

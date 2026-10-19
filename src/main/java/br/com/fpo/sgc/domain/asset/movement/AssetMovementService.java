@@ -7,6 +7,6 @@ import org.springframework.data.domain.Pageable;
 
 public interface AssetMovementService {
     AssetMovementResponseDTO create(AssetMovementRequestDTO dto);
-    Page<AssetMovementResponseDTO> findAll(Pageable pageable);
+    Page<AssetMovementResponseDTO> findAll(String q, Long destinationSectorId, Pageable pageable);
     Page<AssetMovementResponseDTO> findByAssetId(Long assetId, Pageable pageable);
 }

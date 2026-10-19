@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,8 +27,11 @@ public class AssetMovementController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<AssetMovementResponseDTO>> findAll(@PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(movementService.findAll(pageable));
+    public ResponseEntity<Page<AssetMovementResponseDTO>> findAll(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Long destinationSectorId,
+            @PageableDefault(size = 20, sort = "movementDate", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(movementService.findAll(q, destinationSectorId, pageable));
     }
 
     @GetMapping("/asset/{assetId}")

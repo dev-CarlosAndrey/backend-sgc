@@ -1,6 +1,7 @@
 package br.com.fpo.sgc.domain.employee;
 
 import br.com.fpo.sgc.common.exception.BusinessException;
+import br.com.fpo.sgc.common.util.SearchTerm;
 import br.com.fpo.sgc.domain.audit.AuditLogService;
 import br.com.fpo.sgc.domain.company.Company;
 import br.com.fpo.sgc.domain.company.CompanyRepository;
@@ -62,8 +63,8 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<EmployeeResponseDTO> findAll(Pageable pageable) {
-        return employeeRepository.findAll(pageable)
+    public Page<EmployeeResponseDTO> findAll(String q, Long sectorId, Boolean active, Pageable pageable) {
+        return employeeRepository.search(SearchTerm.toLikePattern(q), sectorId, active, pageable)
                 .map(employeeMapper::toDTO);
     }
 

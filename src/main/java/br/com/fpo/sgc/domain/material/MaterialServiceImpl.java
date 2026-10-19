@@ -1,5 +1,6 @@
 package br.com.fpo.sgc.domain.material;
 
+import br.com.fpo.sgc.common.util.SearchTerm;
 import br.com.fpo.sgc.domain.audit.AuditLogService;
 import br.com.fpo.sgc.domain.material.dto.MaterialRequestDTO;
 import br.com.fpo.sgc.domain.material.dto.MaterialResponseDTO;
@@ -47,8 +48,8 @@ public class MaterialServiceImpl implements MaterialService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<MaterialResponseDTO> findAll(Pageable pageable) {
-        return materialRepository.findByActiveTrue(pageable)
+    public Page<MaterialResponseDTO> findAll(String q, Pageable pageable) {
+        return materialRepository.search(SearchTerm.toLikePattern(q), pageable)
                 .map(materialMapper::toDTO);
     }
 

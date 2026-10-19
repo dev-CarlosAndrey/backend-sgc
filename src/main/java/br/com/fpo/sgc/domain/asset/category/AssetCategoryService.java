@@ -8,7 +8,7 @@ import org.springframework.data.domain.Pageable;
 public interface AssetCategoryService {
     AssetCategoryResponseDTO create(AssetCategoryRequestDTO dto);
     AssetCategoryResponseDTO findById(Long id);
-    Page<AssetCategoryResponseDTO> findAll(Pageable pageable);
+    Page<AssetCategoryResponseDTO> findAll(String q, Pageable pageable);
     AssetCategoryResponseDTO update(Long id, AssetCategoryRequestDTO dto);
     void delete(Long id);
 }

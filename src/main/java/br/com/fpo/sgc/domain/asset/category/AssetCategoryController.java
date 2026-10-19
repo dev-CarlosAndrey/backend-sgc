@@ -26,8 +26,10 @@ public class AssetCategoryController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<AssetCategoryResponseDTO>> findAll(@PageableDefault(size = 20, sort = "name") Pageable pageable) {
-        return ResponseEntity.ok(assetCategoryService.findAll(pageable));
+    public ResponseEntity<Page<AssetCategoryResponseDTO>> findAll(
+            @RequestParam(required = false) String q,
+            @PageableDefault(size = 20, sort = "name") Pageable pageable) {
+        return ResponseEntity.ok(assetCategoryService.findAll(q, pageable));
     }
 
     @GetMapping("/{id}")

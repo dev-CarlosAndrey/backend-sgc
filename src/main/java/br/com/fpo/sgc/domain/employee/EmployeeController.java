@@ -26,8 +26,12 @@ public class EmployeeController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<EmployeeResponseDTO>> findAll(@PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(employeeService.findAll(pageable));
+    public ResponseEntity<Page<EmployeeResponseDTO>> findAll(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Long sectorId,
+            @RequestParam(required = false) Boolean active,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(employeeService.findAll(q, sectorId, active, pageable));
     }
 
     @GetMapping("/{id}")

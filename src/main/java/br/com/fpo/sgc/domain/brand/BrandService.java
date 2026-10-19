@@ -8,7 +8,7 @@ import org.springframework.data.domain.Pageable;
 public interface BrandService {
     BrandResponseDTO create(BrandRequestDTO dto);
     BrandResponseDTO findById(Long id);
-    Page<BrandResponseDTO> findAll(Pageable pageable);
+    Page<BrandResponseDTO> findAll(String q, Pageable pageable);
     BrandResponseDTO update(Long id, BrandRequestDTO dto);
     void delete(Long id);
 }

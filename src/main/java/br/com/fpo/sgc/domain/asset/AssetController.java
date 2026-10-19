@@ -39,8 +39,12 @@ public class AssetController {
 
     @GetMapping
     public ResponseEntity<Page<AssetResponseDTO>> findAll(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) AssetStatus status,
+            @RequestParam(required = false) Long sectorId,
+            @RequestParam(required = false) Long categoryId,
             @PageableDefault(size = 10, sort = "name") Pageable pageable) {
-        return ResponseEntity.ok(assetService.findAll(pageable));
+        return ResponseEntity.ok(assetService.findAll(q, status, sectorId, categoryId, pageable));
     }
 
     @GetMapping("/sector/{sectorId}")

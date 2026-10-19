@@ -10,7 +10,7 @@ public interface AssetService {
     AssetResponseDTO create(AssetRequestDTO dto);
     AssetResponseDTO findById(Long id);
     AssetResponseDTO findByTagNumber(String tagNumber);
-    Page<AssetResponseDTO> findAll(Pageable pageable);
+    Page<AssetResponseDTO> findAll(String q, AssetStatus status, Long sectorId, Long categoryId, Pageable pageable);
     Page<AssetResponseDTO> findBySectorId(Long sectorId, Pageable pageable);
     Page<AssetResponseDTO> findByStatus(AssetStatus status, Pageable pageable);
     Page<AssetResponseDTO> findByCategoryId(Long categoryId, Pageable pageable);

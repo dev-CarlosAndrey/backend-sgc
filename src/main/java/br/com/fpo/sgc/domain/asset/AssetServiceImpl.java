@@ -2,6 +2,7 @@ package br.com.fpo.sgc.domain.asset;
 
 import br.com.fpo.sgc.common.exception.BusinessException;
 import br.com.fpo.sgc.common.storage.FileStorageService;
+import br.com.fpo.sgc.common.util.SearchTerm;
 import br.com.fpo.sgc.domain.asset.category.AssetCategory;
 import br.com.fpo.sgc.domain.asset.category.AssetCategoryRepository;
 import br.com.fpo.sgc.domain.asset.dto.AssetRequestDTO;
@@ -83,8 +84,8 @@ public class AssetServiceImpl implements AssetService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<AssetResponseDTO> findAll(Pageable pageable) {
-        return assetRepository.findByActiveTrue(pageable).map(assetMapper::toDTO);
+    public Page<AssetResponseDTO> findAll(String q, AssetStatus status, Long sectorId, Long categoryId, Pageable pageable) {
+        return assetRepository.search(SearchTerm.toLikePattern(q), status, sectorId, categoryId, pageable).map(assetMapper::toDTO);
     }
 
     @Override

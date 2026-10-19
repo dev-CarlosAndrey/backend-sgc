@@ -32,8 +32,10 @@ public class BrandController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<BrandResponseDTO>> findAll(Pageable pageable) {
-        return ResponseEntity.ok(brandService.findAll(pageable));
+    public ResponseEntity<Page<BrandResponseDTO>> findAll(
+            @RequestParam(required = false) String q,
+            Pageable pageable) {
+        return ResponseEntity.ok(brandService.findAll(q, pageable));
     }
 
     @PreAuthorize("hasRole('ADMIN')")

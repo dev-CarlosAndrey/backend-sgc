@@ -35,4 +35,14 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
     List<AuditLog> findForReport(@Param("from") Instant from, @Param("to") Instant to,
                                  @Param("entityName") String entityName, @Param("performedBy") String performedBy,
                                  Pageable pageable);
+
+    // Listagem com busca e filtros opcionais (null = sem filtro). `q` já chega como padrão LIKE
+    // montado por SearchTerm.toLikePattern.
+    @Query("SELECT a FROM AuditLog a " +
+            "WHERE (:q IS NULL " +
+            "OR LOWER(a.entityName) LIKE :q ESCAPE '!' " +
+            "OR LOWER(a.action) LIKE :q ESCAPE '!' " +
+            "OR LOWER(a.performedBy) LIKE :q ESCAPE '!' " +
+            "OR LOWER(a.details) LIKE :q ESCAPE '!')")
+    Page<AuditLog> search(@Param("q") String q, Pageable pageable);
 }

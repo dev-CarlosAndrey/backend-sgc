@@ -2,6 +2,7 @@ package br.com.fpo.sgc.domain.serviceorder;
 
 import br.com.fpo.sgc.common.exception.BusinessException;
 import br.com.fpo.sgc.common.util.PeriodRange;
+import br.com.fpo.sgc.common.util.SearchTerm;
 import br.com.fpo.sgc.domain.asset.Asset;
 import br.com.fpo.sgc.domain.asset.AssetRepository;
 import br.com.fpo.sgc.domain.asset.AssetStatus;
@@ -101,8 +102,8 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ServiceOrderResponseDTO> findAll(Pageable pageable) {
-        return serviceOrderRepository.findByActiveTrue(pageable).map(serviceOrderMapper::toDTO);
+    public Page<ServiceOrderResponseDTO> findAll(String q, ServiceOrderStatus status, ServiceOrderChannel channel, Pageable pageable) {
+        return serviceOrderRepository.search(SearchTerm.toLikePattern(q), status, channel, pageable).map(serviceOrderMapper::toDTO);
     }
 
     @Override

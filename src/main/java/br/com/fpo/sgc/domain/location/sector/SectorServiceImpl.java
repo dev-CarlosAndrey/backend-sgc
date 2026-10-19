@@ -1,5 +1,6 @@
 package br.com.fpo.sgc.domain.location.sector;
 
+import br.com.fpo.sgc.common.util.SearchTerm;
 import br.com.fpo.sgc.domain.audit.AuditLogService;
 import br.com.fpo.sgc.domain.employee.Employee;
 import br.com.fpo.sgc.domain.employee.EmployeeRepository;
@@ -62,8 +63,8 @@ public class SectorServiceImpl implements SectorService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<SectorResponseDTO> findAll(Pageable pageable) {
-        return sectorRepository.findByActiveTrue(pageable)
+    public Page<SectorResponseDTO> findAll(String q, Pageable pageable) {
+        return sectorRepository.search(SearchTerm.toLikePattern(q), pageable)
                 .map(this::mapToDTO);
     }
 

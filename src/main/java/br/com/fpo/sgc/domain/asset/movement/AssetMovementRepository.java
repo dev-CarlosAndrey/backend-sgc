@@ -24,4 +24,18 @@ public interface AssetMovementRepository extends JpaRepository<AssetMovement, Lo
             "ORDER BY m.movementDate DESC")
     List<AssetMovement> findForReport(@Param("from") Instant from, @Param("to") Instant to,
                                       @Param("assetId") Long assetId, @Param("companyId") Long companyId);
+
+    // Listagem com busca e filtros opcionais (null = sem filtro). `q` já chega como padrão LIKE
+    // montado por SearchTerm.toLikePattern.
+    @Query("SELECT m FROM AssetMovement m JOIN m.asset a LEFT JOIN m.originSector o JOIN m.destinationSector d " +
+            "WHERE m.active = true " +
+            "AND (:destinationSectorId IS NULL OR d.id = :destinationSectorId) " +
+            "AND (:q IS NULL " +
+            "OR LOWER(a.tagNumber) LIKE :q ESCAPE '!' " +
+            "OR LOWER(a.name) LIKE :q ESCAPE '!' " +
+            "OR LOWER(o.name) LIKE :q ESCAPE '!' " +
+            "OR LOWER(d.name) LIKE :q ESCAPE '!')")
+    Page<AssetMovement> search(@Param("q") String q,
+                               @Param("destinationSectorId") Long destinationSectorId,
+                               Pageable pageable);
 }

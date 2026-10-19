@@ -26,8 +26,10 @@ public class MaterialController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<MaterialResponseDTO>> findAll(@PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(materialService.findAll(pageable));
+    public ResponseEntity<Page<MaterialResponseDTO>> findAll(
+            @RequestParam(required = false) String q,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(materialService.findAll(q, pageable));
     }
 
     @GetMapping("/{id}")
