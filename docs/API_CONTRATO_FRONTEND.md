@@ -43,7 +43,7 @@ Content-Type: application/json
 ```
 
 - O token expira em **8 horas** (HS256, issuer `sgc-api`).
-- Falha de credenciais retorna **403** sem corpo (erro padrão de autenticação do Spring Security, sem `ProblemDetail` customizado, pois `AuthenticationManager.authenticate` lança antes do `GlobalExceptionHandler` entrar em ação).
+- Falha de credenciais (usuário inexistente, senha errada ou usuário inativo) retorna **401** com `ProblemDetail` (`type` `.../errors/authentication-failed`, `detail` "Usuário ou senha incorretos."). A mensagem é a mesma em todos os casos, para não revelar se o usuário existe. Até 2026-10-19 essa falha respondia 500 por engano (capturada pelo handler genérico de exceções).
 
 ### 2.2 Usar o token
 

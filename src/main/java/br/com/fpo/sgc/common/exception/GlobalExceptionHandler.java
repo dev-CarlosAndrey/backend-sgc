@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -110,6 +111,19 @@ public class GlobalExceptionHandler {
                 "Você não tem permissão para executar esta ação.");
         problemDetail.setTitle("Acesso Negado");
         problemDetail.setType(URI.create("https://sgc.fpo.edu.br/errors/access-denied"));
+        problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
+    }
+
+    // Login com usuário inexistente, senha errada ou conta inativa (lançado pelo AuthenticationManager
+    // no AuthController). Sem este handler, o handler genérico abaixo transformava isso em 500.
+    // Mensagem única para os casos, para não revelar se o usuário existe.
+    @ExceptionHandler(AuthenticationException.class)
+    public ProblemDetail handleAuthenticationException(AuthenticationException e) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED,
+                "Usuário ou senha incorretos.");
+        problemDetail.setTitle("Falha na Autenticação");
+        problemDetail.setType(URI.create("https://sgc.fpo.edu.br/errors/authentication-failed"));
         problemDetail.setProperty("timestamp", Instant.now());
         return problemDetail;
     }
