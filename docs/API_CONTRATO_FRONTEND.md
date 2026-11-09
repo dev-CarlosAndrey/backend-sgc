@@ -148,7 +148,7 @@ Política implementada (`@PreAuthorize` a nível de método, habilitado via `@En
 | Ordem de Serviço — resolver, alterar status (`PATCH /{id}/status`) | — | **ADMIN** ou **TECHNICIAN** |
 | Ordem de Serviço — consultas (por status/solicitante/técnico/bem/período/id/lista) e histórico de status | Qualquer autenticado | — |
 | Dashboard e Relatórios (`/reports/**`) | **ADMIN** apenas | — |
-| Log de auditoria | Qualquer autenticado (sem restrição adicional) | — (somente leitura) |
+| Log de auditoria | `ADMIN` (desde 2026-11-09) | — (somente leitura) |
 | Webhook do WhatsApp (`/whatsapp/webhook`) | **Público** (sem JWT — a Meta não envia token; ver seção 6.17) | **Público**, mas validado por assinatura HMAC própria |
 
 Uma chamada fora do papel permitido retorna **403 Forbidden** sem corpo `ProblemDetail` (resposta padrão do Spring Security). O frontend deve tratar 403 genericamente como "sem permissão" nesses casos, e esconder/desabilitar ações de escrita nos módulos administrativos para usuários `TECHNICIAN`/`USER`.
@@ -648,12 +648,12 @@ Catálogo auxiliar que combina `Brand` + `Material`. **Não vinculado a `Asset`*
 
 ### 6.14 Log de auditoria — `/api/v1/audit-logs`
 
-Somente leitura. Registrado automaticamente pelo backend em toda operação de create/update/delete relevante (não há endpoint de escrita).
+Somente leitura. Registrado automaticamente pelo backend em toda operação de create/update/delete relevante (não há endpoint de escrita). Restrito a `ADMIN` desde 2026-11-09 (antes, qualquer autenticado conseguia ler o log de auditoria de todo o sistema).
 
 | Método | Path | Auth | Descrição |
 |---|---|---|---|
-| GET | `/` | Autenticado | Lista paginada (`size=20`, `sort=createdAt DESC`). Filtro opcional: `q` (entidade, ação, responsável ou detalhes) |
-| GET | `/{entityName}/{entityId}` | Autenticado | Histórico de um recurso específico (ex.: `/Asset/5`) |
+| GET | `/` | `ADMIN` | Lista paginada (`size=20`, `sort=createdAt DESC`). Filtro opcional: `q` (entidade, ação, responsável ou detalhes) |
+| GET | `/{entityName}/{entityId}` | `ADMIN` | Histórico de um recurso específico (ex.: `/Asset/5`) |
 
 **`AuditLogResponseDTO`:**
 ```json
