@@ -242,10 +242,10 @@ Nas tabelas abaixo, **Auth** indica o requisito de acesso: `Autenticado` (qualqu
   "logoUrl": "string | null",
   "active": true,
   "totalBuildings": 3,
-  "totalSectors": 0
+  "totalSectors": 9
 }
 ```
-⚠️ `totalSectors` está sempre `0` hoje — é calculado em `CompanyServiceImpl.mapToDTO` mas o valor nunca é buscado de fato (bug/lacuna conhecida, não corrigido ainda).
+`totalSectors` conta os setores ativos de todos os prédios ativos da empresa (`SectorRepository.countByBuilding_CompanyIdAndActiveTrue`). Corrigido em 2026-11-09 — antes vinha sempre `0` (bug conhecido, ver histórico desta seção).
 
 ### 6.4 Prédios — `/api/v1/buildings`
 

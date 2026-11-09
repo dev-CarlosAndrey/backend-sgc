@@ -15,6 +15,7 @@ public interface SectorRepository extends JpaRepository<Sector, Long> {
     Page<Sector> findByBuildingIdAndActiveTrue(Long buildingId, Pageable pageable);
     long countByBuildingId(Long buildingId);
     long countByBuildingIdAndActiveTrue(Long buildingId);
+    long countByBuilding_CompanyIdAndActiveTrue(Long companyId);
     // Usado pela abertura de OS via WhatsApp (RF15): o nome do setor vem em texto livre do usuário.
     Optional<Sector> findByNameIgnoreCaseAndActiveTrue(String name);
 

@@ -7,6 +7,7 @@ import br.com.fpo.sgc.domain.company.dto.CompanyRequestDTO;
 import br.com.fpo.sgc.domain.company.dto.CompanyResponseDTO;
 import br.com.fpo.sgc.domain.company.mapper.CompanyMapper;
 import br.com.fpo.sgc.domain.location.building.BuildingRepository;
+import br.com.fpo.sgc.domain.location.sector.SectorRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -26,6 +27,7 @@ public class CompanyServiceImpl implements CompanyService {
 
     private final CompanyRepository companyRepository;
     private final BuildingRepository buildingRepository;
+    private final SectorRepository sectorRepository;
     private final AuditLogService auditLogService;
     private final CompanyMapper companyMapper;
     private final FileStorageService fileStorageService;
@@ -146,7 +148,7 @@ public class CompanyServiceImpl implements CompanyService {
      */
     private CompanyResponseDTO mapToDTO(Company company) {
         long totalBuildings = buildingRepository.countByCompanyIdAndActiveTrue(company.getId());
-        long totalSectors = 0;
+        long totalSectors = sectorRepository.countByBuilding_CompanyIdAndActiveTrue(company.getId());
 
         return companyMapper.toDTO(company, totalBuildings, totalSectors);
     }
