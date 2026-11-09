@@ -11,7 +11,8 @@ import org.springframework.stereotype.Service;
  * estiver no formato de abertura de OS ({@link WhatsAppServiceOrderCommand}), delega a criação do chamado
  * para {@link WhatsAppServiceOrderIntakeService}; se for um comando de consulta de status
  * ({@link WhatsAppServiceOrderStatusQueryCommand}), delega para
- * {@link WhatsAppServiceOrderStatusQueryService}; caso contrário, responde com a mensagem de boas-vindas.
+ * {@link WhatsAppServiceOrderStatusQueryService}; se for uma avaliação ({@link WhatsAppServiceOrderRatingCommand}),
+ * para {@link WhatsAppServiceOrderRatingService}; caso contrário, responde com a mensagem de boas-vindas.
  * Roda fora da requisição do webhook ({@code @Async}, ver {@code AsyncConfig}) para não atrasar a resposta
  * que a Meta espera; falha de envio ou de processamento nunca deve propagar para o webhook.
  */
@@ -23,6 +24,7 @@ public class WhatsAppAutoReplyService {
     private final WhatsAppNotificationSender whatsAppNotificationSender;
     private final WhatsAppServiceOrderIntakeService intakeService;
     private final WhatsAppServiceOrderStatusQueryService statusQueryService;
+    private final WhatsAppServiceOrderRatingService ratingService;
 
     @Async
     public void handleIncomingMessage(String fromPhoneNumber, String displayName, String text) {
@@ -34,6 +36,8 @@ public class WhatsAppAutoReplyService {
                     .<String>map(command -> replyFor(intakeService.open(command, fromPhoneNumber, displayName)))
                     .or(() -> WhatsAppServiceOrderStatusQueryCommand.parse(text)
                             .map(command -> replyFor(statusQueryService.query(command, fromPhoneNumber))))
+                    .or(() -> WhatsAppServiceOrderRatingCommand.parse(text)
+                            .map(command -> replyFor(ratingService.rate(command, fromPhoneNumber))))
                     .orElseGet(WhatsAppMessageTemplates::welcomeMessage);
 
             whatsAppNotificationSender.sendText(fromPhoneNumber, reply);
@@ -66,6 +70,19 @@ public class WhatsAppAutoReplyService {
                     WhatsAppMessageTemplates.serviceOrderStatusMessage(single.serviceOrder());
             case WhatsAppServiceOrderStatusQueryService.StatusQueryResult.RecentList recentList ->
                     WhatsAppMessageTemplates.serviceOrderListMessage(recentList.serviceOrders());
+        };
+    }
+
+    private String replyFor(WhatsAppServiceOrderRatingService.RatingResult result) {
+        return switch (result) {
+            case WhatsAppServiceOrderRatingService.RatingResult.InvalidFormat ignored ->
+                    WhatsAppMessageTemplates.ratingFormatMessage();
+            case WhatsAppServiceOrderRatingService.RatingResult.NotFound notFound ->
+                    WhatsAppMessageTemplates.serviceOrderNotFoundForPhoneMessage(notFound.serviceOrderId());
+            case WhatsAppServiceOrderRatingService.RatingResult.Rejected rejected ->
+                    WhatsAppMessageTemplates.ratingRejectedMessage(rejected.reason());
+            case WhatsAppServiceOrderRatingService.RatingResult.Success success ->
+                    WhatsAppMessageTemplates.ratingRegisteredMessage(success.serviceOrderId(), success.score());
         };
     }
 }

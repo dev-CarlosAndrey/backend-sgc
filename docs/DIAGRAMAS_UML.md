@@ -184,7 +184,7 @@ classDiagram
 
 ## 3. Diagrama entidade-relacionamento (ER)
 
-Simplificado ao nível de tabela/chave, refletindo o schema aplicado pelas migrações Flyway (`V1`–`V19`). Para a lista completa de colunas, consultar `src/main/resources/db/migration/`.
+Simplificado ao nível de tabela/chave, refletindo o schema aplicado pelas migrações Flyway (`V1`–`V20`). Para a lista completa de colunas, consultar `src/main/resources/db/migration/`.
 
 ```mermaid
 erDiagram

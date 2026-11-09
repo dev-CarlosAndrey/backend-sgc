@@ -2,6 +2,7 @@ package br.com.fpo.sgc.domain.notification;
 
 import br.com.fpo.sgc.domain.serviceorder.ServiceOrder;
 import br.com.fpo.sgc.domain.serviceorder.ServiceOrderEvent;
+import br.com.fpo.sgc.domain.serviceorder.ServiceOrderEventType;
 import br.com.fpo.sgc.domain.serviceorder.ServiceOrderRepository;
 import br.com.fpo.sgc.domain.user.User;
 import br.com.fpo.sgc.domain.user.UserRepository;
@@ -13,6 +14,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.LinkedHashSet;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -41,7 +43,8 @@ public class ServiceOrderNotificationListener {
             String subject = "OS #" + so.getId() + " - " + so.getTitle();
             String message = buildMessage(so, event);
             for (User recipient : recipients(so, event)) {
-                notificationService.notifyUser(so, recipient, subject, message, event.status());
+                String text = isRatingInvite(so, event, recipient) ? message + ratingInvite(so) : message;
+                notificationService.notifyUser(so, recipient, subject, text, event.status());
             }
         } catch (Exception e) {
             log.error("Erro ao disparar notificações da OS {}", event.serviceOrderId(), e);
@@ -60,6 +63,18 @@ public class ServiceOrderNotificationListener {
             }
         }
         return recipients;
+    }
+
+    // Na conclusão, o solicitante com telefone é convidado a avaliar o atendimento pelo WhatsApp.
+    private boolean isRatingInvite(ServiceOrder so, ServiceOrderEvent event, User recipient) {
+        return event.type() == ServiceOrderEventType.RESOLVED
+                && so.getRequester() != null && Objects.equals(recipient.getId(), so.getRequester().getId())
+                && recipient.getPhone() != null && !recipient.getPhone().isBlank();
+    }
+
+    private String ratingInvite(ServiceOrder so) {
+        return " Como foi o atendimento? Avalie pelo WhatsApp do SGC enviando: Nota #" + so.getId()
+                + " seguida de uma nota de 1 a 5 (ex.: Nota #" + so.getId() + " 5).";
     }
 
     private String buildMessage(ServiceOrder so, ServiceOrderEvent event) {

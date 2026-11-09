@@ -5,7 +5,8 @@ import java.util.List;
 
 /**
  * avgResolutionHours = média (em horas) entre abertura e conclusão das ordens RESOLVED do filtro;
- * nulo quando não há nenhuma.
+ * nulo quando não há nenhuma. ratedOrders/avgRating = ordens avaliadas pelo solicitante e a nota média
+ * (1 a 5, 1 casa); avgRating nulo quando nenhuma foi avaliada.
  */
 public record ServiceOrderReportDTO(
         long total,
@@ -15,6 +16,8 @@ public record ServiceOrderReportDTO(
         List<LabelCountDTO> byStatus,
         List<LabelCountDTO> byPriority,
         List<TechnicianReportRowDTO> byTechnician,
-        List<AssetMaintenanceRowDTO> topAssets
+        List<AssetMaintenanceRowDTO> topAssets,
+        long ratedOrders,
+        Double avgRating
 ) {
 }

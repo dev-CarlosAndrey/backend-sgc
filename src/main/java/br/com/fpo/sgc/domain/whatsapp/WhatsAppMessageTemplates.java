@@ -28,6 +28,8 @@ final class WhatsAppMessageTemplates {
             *Status* — lista seus últimos chamados
             *Status #<número>* — detalhe de um chamado específico""";
 
+    private static final String RATING_FORMAT_EXAMPLE = "*Nota #<número> <nota de 1 a 5>* — avalia um chamado concluído (ex.: Nota #12 5)";
+
     private WhatsAppMessageTemplates() {
     }
 
@@ -45,7 +47,11 @@ final class WhatsAppMessageTemplates {
 
                 Para acompanhar um chamado já aberto:
 
-                %s""".formatted(OPEN_FORMAT_EXAMPLE, STATUS_FORMAT_EXAMPLE);
+                %s
+
+                Para avaliar o atendimento depois da conclusão:
+
+                %s""".formatted(OPEN_FORMAT_EXAMPLE, STATUS_FORMAT_EXAMPLE, RATING_FORMAT_EXAMPLE);
     }
 
     static String sectorNotFoundMessage(String sectorName) {
@@ -103,7 +109,32 @@ final class WhatsAppMessageTemplates {
                 statusLabel(serviceOrder.status()),
                 serviceOrder.sector().name(),
                 technicianLine,
-                DATE_TIME.format(serviceOrder.createdAt()));
+                DATE_TIME.format(serviceOrder.createdAt())) + ratingLine(serviceOrder);
+    }
+
+    // Só para OS concluída: mostra a nota dada ou convida a avaliar.
+    private static String ratingLine(ServiceOrderResponseDTO serviceOrder) {
+        if (serviceOrder.status() != ServiceOrderStatus.RESOLVED) {
+            return "";
+        }
+        return serviceOrder.rating() != null
+                ? "\nSua avaliação: " + serviceOrder.rating() + "/5"
+                : "\n\nComo foi o atendimento? Envie: Nota #" + serviceOrder.id() + " <nota de 1 a 5>";
+    }
+
+    static String ratingRegisteredMessage(Long serviceOrderId, int score) {
+        return "⭐ Obrigado! Sua nota *%d* para o chamado *#%d* foi registrada.".formatted(score, serviceOrderId);
+    }
+
+    static String ratingFormatMessage() {
+        return """
+                Para avaliar um chamado concluído, envie neste formato:
+
+                %s""".formatted(RATING_FORMAT_EXAMPLE);
+    }
+
+    static String ratingRejectedMessage(String reason) {
+        return "❌ " + reason;
     }
 
     static String serviceOrderListMessage(List<ServiceOrderResponseDTO> serviceOrders) {

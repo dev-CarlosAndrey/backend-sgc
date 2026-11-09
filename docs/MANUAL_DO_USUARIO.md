@@ -53,6 +53,16 @@ Problema: <descrição>
 - `Status` — lista as 5 Ordens de Serviço mais recentes abertas por aquele número.
 - `Status #<número>` ou `Status <número>` — detalhe de uma OS específica (só é exibida se o chamado pertencer ao número que está consultando).
 
+### 4.4 Avaliar o atendimento pelo WhatsApp
+
+Quando a OS é concluída, o solicitante recebe na notificação um convite para avaliar o atendimento. Para avaliar, envie:
+
+```
+Nota #<número da OS> <nota de 1 a 5>
+```
+
+Exemplo: `Nota #12 5`. Só é possível avaliar chamados concluídos do próprio número, uma única vez. O detalhe do chamado (`Status #12`) mostra a nota dada ou o convite, se ainda não houver avaliação. A nota média aparece no relatório de ordens de serviço, no geral e por técnico.
+
 ## 5. Acompanhamento da Ordem de Serviço (Técnico/Administrador)
 
 1. **Atribuir técnico** (Administrador): a OS passa para "Em andamento" automaticamente.

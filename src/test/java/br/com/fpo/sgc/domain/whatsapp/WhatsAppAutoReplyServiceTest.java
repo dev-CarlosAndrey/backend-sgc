@@ -5,6 +5,7 @@ import br.com.fpo.sgc.domain.notification.WhatsAppNotificationSender;
 import br.com.fpo.sgc.domain.serviceorder.dto.ServiceOrderResponseDTO;
 import org.junit.jupiter.api.Test;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -17,7 +18,8 @@ class WhatsAppAutoReplyServiceTest {
     private final WhatsAppNotificationSender sender = mock(WhatsAppNotificationSender.class);
     private final WhatsAppServiceOrderIntakeService intakeService = mock(WhatsAppServiceOrderIntakeService.class);
     private final WhatsAppServiceOrderStatusQueryService statusQueryService = mock(WhatsAppServiceOrderStatusQueryService.class);
-    private final WhatsAppAutoReplyService service = new WhatsAppAutoReplyService(sender, intakeService, statusQueryService);
+    private final WhatsAppServiceOrderRatingService ratingService = mock(WhatsAppServiceOrderRatingService.class);
+    private final WhatsAppAutoReplyService service = new WhatsAppAutoReplyService(sender, intakeService, statusQueryService, ratingService);
 
     @Test
     void mensagemForaDoFormato_respondeComBoasVindas() {
@@ -117,5 +119,37 @@ class WhatsAppAutoReplyServiceTest {
         when(intakeService.open(any(), anyString(), anyString())).thenThrow(new RuntimeException("falha de banco"));
 
         service.handleIncomingMessage("558899999999", "Maria", COMANDO_VALIDO);
+    }
+
+    @Test
+    void mensagemDeAvaliacao_respondeComAConfirmacao() {
+        when(sender.isConfigured()).thenReturn(true);
+        when(ratingService.rate(any(), eq("558899999999")))
+                .thenReturn(new WhatsAppServiceOrderRatingService.RatingResult.Success(12L, 5));
+
+        service.handleIncomingMessage("558899999999", "Maria", "Nota #12 5");
+
+        verify(sender).sendText(eq("558899999999"), contains("Obrigado"));
+    }
+
+    @Test
+    void avaliacaoForaDoFormato_respondeComOFormato() {
+        when(sender.isConfigured()).thenReturn(true);
+        when(ratingService.rate(any(), any())).thenReturn(new WhatsAppServiceOrderRatingService.RatingResult.InvalidFormat());
+
+        service.handleIncomingMessage("558899999999", "Maria", "Nota 9");
+
+        verify(sender).sendText(eq("558899999999"), contains("Nota #<número>"));
+    }
+
+    @Test
+    void avaliacaoRecusada_respondeComOMotivo() {
+        when(sender.isConfigured()).thenReturn(true);
+        when(ratingService.rate(any(), any()))
+                .thenReturn(new WhatsAppServiceOrderRatingService.RatingResult.Rejected("Este chamado já foi avaliado."));
+
+        service.handleIncomingMessage("558899999999", "Maria", "Nota #12 5");
+
+        verify(sender).sendText(eq("558899999999"), contains("já foi avaliado"));
     }
 }

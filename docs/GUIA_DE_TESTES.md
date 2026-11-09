@@ -26,7 +26,7 @@ O backend usa dois tipos de teste, por propósito distinto:
 
 ## 3. Cobertura atual
 
-Estado em 2026-10-19: **159 testes**, todos passando (`BUILD SUCCESS`), organizados por módulo:
+Estado em 2026-11-02: **192 testes**, todos passando (`BUILD SUCCESS`), organizados por módulo:
 
 | Módulo | Classes de teste | O que é coberto |
 |---|---|---|
@@ -35,9 +35,9 @@ Estado em 2026-10-19: **159 testes**, todos passando (`BUILD SUCCESS`), organiza
 | `domain.dashboard` | `DashboardServiceImplTest` | Cálculo dos indicadores do painel a partir de dados agregados. |
 | `domain.notification` | `EmailNotificationSenderTest`, `NotificationServiceImplTest`, `ServiceOrderEmailTemplateTest`, `ServiceOrderNotificationListenerTest`, `WhatsAppNotificationSenderTest` | Envio por e-mail (`MockRestServiceServer`), orquestração WhatsApp → fallback e-mail, template HTML/texto por status, disparo do listener assíncrono sem duplicar nem notificar inativos. |
 | `domain.report` | `AssetInsightsServiceImplTest`, `ChannelInsightsServiceImplTest`, `ReportServiceImplTest`, `ServiceOrderInsightsServiceImplTest`, `TraceabilityReportServiceImplTest` | Agregação dos relatórios (bens, OS, custo de manutenção, depreciação, bens críticos, movimentações, auditoria, OS por canal e entrega das notificações — incluindo o reagrupamento das tentativas em notificações) e geração de CSV/PDF por relatório. |
-| `domain.serviceorder` | `ServiceOrderServiceImplChannelTest`, `ServiceOrderServiceImplPeriodTest`, `ServiceOrderServiceImplResolveTest` | Canal de abertura (painel/WhatsApp), filtro por período, regras de resolução (exige laudo, bloqueia OS já resolvida/cancelada). |
+| `domain.serviceorder` | `ServiceOrderServiceImplChannelTest`, `ServiceOrderServiceImplPeriodTest`, `ServiceOrderServiceImplRatingTest`, `ServiceOrderServiceImplResolveTest` | Canal de abertura (painel/WhatsApp), filtro por período, regras de avaliação (só OS concluída do próprio solicitante, uma vez, nota de 1 a 5), regras de resolução (exige laudo, bloqueia OS já resolvida/cancelada). |
 | `domain.user` | `UserServiceImplFindOrCreateByPhoneTest` | Resolução/criação de usuário por telefone, incluindo o caso de colisão de nome (ver `../CLAUDE.md` e correção aplicada em `UserServiceImpl.resolveUniqueName`). |
-| `domain.whatsapp` | `WhatsAppAutoReplyServiceTest`, `WhatsAppServiceOrderCommandTest`, `WhatsAppServiceOrderIntakeServiceTest`, `WhatsAppServiceOrderStatusQueryCommandTest`, `WhatsAppServiceOrderStatusQueryServiceTest`, `WhatsAppSignatureVerifierTest`, `WhatsAppWebhookControllerTest`, `WhatsAppWebhookPayloadTest` | Parsing de comando de abertura e de consulta de status, resolução de setor/bem, validação de assinatura HMAC do webhook (`X-Hub-Signature-256`), orquestração de resposta automática. |
+| `domain.whatsapp` | `WhatsAppAutoReplyServiceTest`, `WhatsAppServiceOrderCommandTest`, `WhatsAppServiceOrderIntakeServiceTest`, `WhatsAppServiceOrderRatingCommandTest`, `WhatsAppServiceOrderRatingServiceTest`, `WhatsAppServiceOrderStatusQueryCommandTest`, `WhatsAppServiceOrderStatusQueryServiceTest`, `WhatsAppSignatureVerifierTest`, `WhatsAppWebhookControllerTest`, `WhatsAppWebhookPayloadTest` | Parsing de comando de abertura, de consulta de status e de avaliação, resolução de setor/bem, validação de assinatura HMAC do webhook (`X-Hub-Signature-256`), orquestração de resposta automática. |
 | raiz (`br.com.fpo.sgc`) | `SgcApiApplicationTests` | Contexto completo + validação de schema (Flyway/`ddl-auto`). |
 
 ## 4. Testes manuais realizados (fora da suíte automatizada)

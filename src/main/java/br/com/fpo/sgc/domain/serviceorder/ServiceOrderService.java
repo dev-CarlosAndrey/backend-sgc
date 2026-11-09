@@ -27,4 +27,10 @@ public interface ServiceOrderService {
     ServiceOrderResponseDTO changeStatus(Long id, ServiceOrderStatusChangeRequestDTO dto);
     Page<ServiceOrderStatusLogResponseDTO> findStatusHistory(Long id, Pageable pageable);
     void delete(Long id);
+
+    /**
+     * Registra a avaliação (1 a 5) do atendimento feita pelo próprio solicitante. Só vale para OS concluída e
+     * uma única vez. OS de outro solicitante é tratada como inexistente, para não confirmar que ela existe.
+     */
+    ServiceOrderResponseDTO rate(Long id, Long requesterId, int rating);
 }

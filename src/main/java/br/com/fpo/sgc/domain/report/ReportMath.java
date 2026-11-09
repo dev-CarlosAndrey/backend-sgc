@@ -28,6 +28,14 @@ final class ReportMath {
         return total == 0 ? null : round1(part * 100.0 / total);
     }
 
+    // Média das notas de avaliação (1 casa); nula sem nenhuma avaliação.
+    static Double averageRating(List<Integer> ratings) {
+        if (ratings.isEmpty()) {
+            return null;
+        }
+        return round1(ratings.stream().mapToInt(Integer::intValue).average().orElse(0));
+    }
+
     static String money(BigDecimal value) {
         return value.setScale(2, RoundingMode.HALF_UP).toPlainString().replace('.', ',');
     }

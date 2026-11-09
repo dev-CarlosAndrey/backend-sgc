@@ -5,6 +5,8 @@ import br.com.fpo.sgc.domain.asset.Asset;
 import br.com.fpo.sgc.domain.location.sector.Sector;
 import br.com.fpo.sgc.domain.user.User;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -65,4 +67,12 @@ public class ServiceOrder extends BaseEntity {
 
     @Column(name = "cost", precision = 12, scale = 2)
     private BigDecimal cost;
+
+    // Nota de 1 a 5 dada pelo solicitante depois da conclusão; nula enquanto não avaliada.
+    @Column(name = "rating")
+    @JdbcTypeCode(SqlTypes.TINYINT)
+    private Integer rating;
+
+    @Column(name = "rated_at")
+    private Instant ratedAt;
 }

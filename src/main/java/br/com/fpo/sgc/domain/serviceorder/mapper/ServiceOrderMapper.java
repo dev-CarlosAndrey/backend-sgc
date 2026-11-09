@@ -51,7 +51,8 @@ public class ServiceOrderMapper {
                 so.getClosedAt(),
                 so.getCost(),
                 so.getActive(),
-                so.getCreatedAt()
+                so.getCreatedAt(),
+                so.getRating()
         );
     }
 }

@@ -17,7 +17,7 @@ Este diretório reúne a documentação exigida pelas diretrizes de TCC da FPO p
 | Levantamento de requisitos | [`REQUISITOS.md`](REQUISITOS.md) (atores, 34 RF, 22 RNF, 14 regras de negócio e rastreabilidade com os objetivos, espelhando a seção 6.5.4 do TCC) e [`PLANO_IMPLEMENTACAO_MVP.md`](PLANO_IMPLEMENTACAO_MVP.md) (status de implementação de cada item). |
 | Modelagem | [`DIAGRAMAS_UML.md`](DIAGRAMAS_UML.md) (classes, ER) e [`PLANO_IMPLEMENTACAO_MVP.md`](PLANO_IMPLEMENTACAO_MVP.md) (seção 5, modelo de dados). |
 | Implementação | [`DOCUMENTACAO_TECNICA_TCC.md`](DOCUMENTACAO_TECNICA_TCC.md) — arquitetura, stack, convenções, funcionalidades implementadas. |
-| Testes | [`GUIA_DE_TESTES.md`](GUIA_DE_TESTES.md) — estratégia, cobertura atual (159 testes) e testes manuais realizados. |
+| Testes | [`GUIA_DE_TESTES.md`](GUIA_DE_TESTES.md) — estratégia, cobertura atual (192 testes) e testes manuais realizados. |
 | Implantação | [`GUIA_DE_IMPLANTACAO.md`](GUIA_DE_IMPLANTACAO.md) — build, variáveis de ambiente, execução, considerações para produção real. |
 
 ## Documentação Técnica

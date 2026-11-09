@@ -137,7 +137,8 @@ public class ReportServiceImpl implements ReportService {
 
         List<TechnicianReportRowDTO> technicianRows = new ArrayList<>();
         byTechnician.forEach((id, acc) -> technicianRows.add(
-                new TechnicianReportRowDTO(id, acc.name, acc.total, acc.resolved, averageHours(acc.durations))));
+                new TechnicianReportRowDTO(id, acc.name, acc.total, acc.resolved, averageHours(acc.durations),
+                        ReportMath.averageRating(acc.ratings))));
         technicianRows.sort(Comparator.comparingLong(TechnicianReportRowDTO::total).reversed()
                 .thenComparing(TechnicianReportRowDTO::technicianName));
 
@@ -148,6 +149,7 @@ public class ReportServiceImpl implements ReportService {
                 .toList();
 
         List<Duration> resolutionTimes = orders.stream().map(ReportServiceImpl::resolutionTime).filter(Objects::nonNull).toList();
+        List<Integer> ratings = orders.stream().map(ServiceOrder::getRating).filter(Objects::nonNull).toList();
 
         return new ServiceOrderReportDTO(
                 orders.size(),
@@ -159,7 +161,9 @@ public class ReportServiceImpl implements ReportService {
                 Arrays.stream(ServiceOrderPriority.values())
                         .map(p -> new LabelCountDTO(p.name(), byPriority.getOrDefault(p, 0L))).toList(),
                 technicianRows,
-                topAssets);
+                topAssets,
+                ratings.size(),
+                ReportMath.averageRating(ratings));
     }
 
     @Override
@@ -385,6 +389,7 @@ public class ReportServiceImpl implements ReportService {
         private long total;
         private long resolved;
         private final List<Duration> durations = new ArrayList<>();
+        private final List<Integer> ratings = new ArrayList<>();
 
         private TechnicianAccumulator(String name) {
             this.name = name;
@@ -398,6 +403,9 @@ public class ReportServiceImpl implements ReportService {
             Duration duration = resolutionTime(so);
             if (duration != null) {
                 durations.add(duration);
+            }
+            if (so.getRating() != null) {
+                ratings.add(so.getRating());
             }
         }
     }

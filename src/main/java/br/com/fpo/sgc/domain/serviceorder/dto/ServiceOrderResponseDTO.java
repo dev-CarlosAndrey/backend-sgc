@@ -25,6 +25,7 @@ public record ServiceOrderResponseDTO(
         Instant closedAt,
         BigDecimal cost,
         Boolean active,
-        Instant createdAt
+        Instant createdAt,
+        Integer rating
 ) {
 }

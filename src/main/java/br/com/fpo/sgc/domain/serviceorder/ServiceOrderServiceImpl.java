@@ -266,6 +266,39 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
     }
 
     @Override
+    @Transactional
+    public ServiceOrderResponseDTO rate(Long id, Long requesterId, int rating) {
+        ServiceOrder so = serviceOrderRepository.findById(id)
+                .filter(order -> order.getRequester().getId().equals(requesterId))
+                .orElseThrow(() -> new EntityNotFoundException("Ordem de serviço não encontrada com ID: " + id));
+
+        if (rating < 1 || rating > 5) {
+            throw new BusinessException("A nota deve ser um número de 1 a 5.");
+        }
+        if (so.getStatus() != ServiceOrderStatus.RESOLVED) {
+            throw new BusinessException("Só é possível avaliar um chamado concluído.");
+        }
+        if (so.getRating() != null) {
+            throw new BusinessException("Este chamado já foi avaliado.");
+        }
+
+        so.setRating(rating);
+        so.setRatedAt(Instant.now());
+        ServiceOrder ratedSo = serviceOrderRepository.save(so);
+
+        // Avaliação não muda a situação da OS: não gera histórico de status nem notificação.
+        auditLogService.log(
+                "ServiceOrder",
+                ratedSo.getId(),
+                "RATE",
+                currentUser(),
+                "Atendimento avaliado com nota " + rating
+        );
+
+        return serviceOrderMapper.toDTO(ratedSo);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Page<ServiceOrderStatusLogResponseDTO> findStatusHistory(Long id, Pageable pageable) {
         if (!serviceOrderRepository.existsById(id)) {

@@ -1,6 +1,6 @@
 # Contrato da API — SGC API (para consumo pelo frontend)
 
-> Atualizado em 2026-10-18 (busca `q` e filtros opcionais nas listagens, ver 3.1; corpo de `PATCH /service-orders/{id}/resolve` documentado como `text/plain`, ver 6.10; antes, 2026-10-12), a partir do código-fonte real de `../src/main/java/br/com/fpo/sgc` e das migrations `V1–V19`, e conferido contra respostas reais da API rodando (formato de paginação, filtros, CSV, RBAC, CORS). Descreve o que existe e funciona hoje no backend — sem especulação sobre funcionalidades futuras. Cobre o núcleo administrativo (Fase 1), as notificações por e-mail **e por WhatsApp**, os relatórios (CSV e PDF) e o tratamento de erro endurecido em 2026-10-12 (seção 3.2). Desde 2026-10-02, OS também podem nascer de uma mensagem de WhatsApp e ser consultadas por lá (RF15/RF16, ver 6.10/6.17) — o frontend vai ver essas OS misturadas nas mesmas listagens, com `channel: "WHATSAPP"`. Os quatro requisitos funcionais do WhatsApp (RF14–RF17) estão concluídos; não há endpoint novo que o frontend precise chamar por causa disso — é tudo mensagem de WhatsApp. Ver `PLANO_IMPLEMENTACAO_MVP.md` para o roadmap completo.
+> Atualizado em 2026-11-02 (avaliação do atendimento: campo `rating` na OS e nota média no relatório de OS, ver 6.10 e 6.16). Anterior: 2026-10-18 (busca `q` e filtros opcionais nas listagens, ver 3.1; corpo de `PATCH /service-orders/{id}/resolve` documentado como `text/plain`, ver 6.10; antes, 2026-10-12), a partir do código-fonte real de `../src/main/java/br/com/fpo/sgc` e das migrations `V1–V19`, e conferido contra respostas reais da API rodando (formato de paginação, filtros, CSV, RBAC, CORS). Descreve o que existe e funciona hoje no backend — sem especulação sobre funcionalidades futuras. Cobre o núcleo administrativo (Fase 1), as notificações por e-mail **e por WhatsApp**, os relatórios (CSV e PDF) e o tratamento de erro endurecido em 2026-10-12 (seção 3.2). Desde 2026-10-02, OS também podem nascer de uma mensagem de WhatsApp e ser consultadas por lá (RF15/RF16, ver 6.10/6.17) — o frontend vai ver essas OS misturadas nas mesmas listagens, com `channel: "WHATSAPP"`. Os quatro requisitos funcionais do WhatsApp (RF14–RF17) estão concluídos; não há endpoint novo que o frontend precise chamar por causa disso — é tudo mensagem de WhatsApp. Ver `PLANO_IMPLEMENTACAO_MVP.md` para o roadmap completo.
 
 ## 1. Visão geral
 
@@ -545,9 +545,12 @@ O corpo é o **laudo em texto puro** (`Content-Type: text/plain`), sem aspas e s
   "closedAt": "2026-09-21T12:00:00Z | null",
   "cost": 150.75,
   "active": true,
-  "createdAt": "2026-09-21T12:00:00Z"
+  "createdAt": "2026-09-21T12:00:00Z",
+  "rating": 5
 }
 ```
+
+`rating` (desde 2026-11-02): nota de 1 a 5 dada pelo solicitante pelo WhatsApp depois da conclusão (`Nota #<id> <nota>`, ver 6.17); `null` enquanto não avaliada. Só existe para OS `RESOLVED`, é dada uma única vez e não tem endpoint no painel.
 
 **`GET /period`** — filtro por período (RF12):
 - `from` e `to`: datas `yyyy-MM-dd`, **inclusivas** nas duas pontas (fuso `America/Fortaleza`). Ao menos uma é obrigatória; a outra pode ser omitida.
@@ -737,14 +740,17 @@ Filtros de `/service-orders` e `/service-orders/export` (todos opcionais; sem ne
   "avgResolutionHours": 2.5,
   "byStatus":   [ { "key": "OPEN", "total": 3 }, { "key": "IN_PROGRESS", "total": 0 }, { "key": "RESOLVED", "total": 3 }, { "key": "CANCELLED", "total": 0 } ],
   "byPriority": [ { "key": "LOW", "total": 2 }, { "key": "MEDIUM", "total": 1 }, { "key": "HIGH", "total": 3 }, { "key": "URGENT", "total": 0 } ],
-  "byTechnician": [ { "technicianId": 5, "technicianName": "admin", "total": 3, "resolved": 3, "avgResolutionHours": 2.5 },
-                    { "technicianId": null, "technicianName": "Sem técnico", "total": 3, "resolved": 0, "avgResolutionHours": null } ],
-  "topAssets": [ { "assetId": 4, "tagNumber": "REL-001", "name": "Notebook", "total": 2 } ]
+  "byTechnician": [ { "technicianId": 5, "technicianName": "admin", "total": 3, "resolved": 3, "avgResolutionHours": 2.5, "avgRating": 4.5 },
+                    { "technicianId": null, "technicianName": "Sem técnico", "total": 3, "resolved": 0, "avgResolutionHours": null, "avgRating": null } ],
+  "topAssets": [ { "assetId": 4, "tagNumber": "REL-001", "name": "Notebook", "total": 2 } ],
+  "ratedOrders": 2,
+  "avgRating": 4.5
 }
 ```
 - `avgResolutionHours` = média entre abertura e conclusão das OS **`RESOLVED`** do filtro (canceladas não contam); `null` se não houver nenhuma. Arredondado a 1 casa.
 - `totalCost` = soma do `cost` das OS do filtro.
 - `topAssets` = até 5 bens com mais OS no filtro (mais manutenções).
+- `ratedOrders` / `avgRating` (desde 2026-11-02) = OS do filtro avaliadas pelo solicitante e a nota média (1 a 5, 1 casa); `avgRating` também por técnico. `null` quando nenhuma foi avaliada.
 
 **`GET /reports/maintenance-cost`** — filtros opcionais: `from`, `to` (`yyyy-MM-dd` inclusivas), `field` (`CLOSED` padrão | `OPENED`), `companyId`, `threshold` (% padrão `50`; negativo → 400)
 ```json
@@ -864,7 +870,7 @@ Setor: <nome do setor>
 Bem: <tombamento, opcional>
 Problema: <descrição>
 ```
-o backend abre a OS de fato (`channel: WHATSAPP`, ver 6.10) e responde com a confirmação; se o setor/bem não existir, responde com o erro explicando o formato. Desde 2026-10-02, a mensagem `Status` (lista os últimos chamados do telefone) ou `Status #<número>` (detalhe de um chamado) também é interpretada (RF16) — só mostra o chamado se ele pertencer ao telefone que perguntou; qualquer outra mensagem recebe a mensagem de boas-vindas com os dois formatos. Não há nada aqui que o frontend precise chamar ou exibir — é tudo mensagem de WhatsApp, não API.
+o backend abre a OS de fato (`channel: WHATSAPP`, ver 6.10) e responde com a confirmação; se o setor/bem não existir, responde com o erro explicando o formato. Desde 2026-10-02, a mensagem `Status` (lista os últimos chamados do telefone) ou `Status #<número>` (detalhe de um chamado) também é interpretada (RF16) — só mostra o chamado se ele pertencer ao telefone que perguntou; desde 2026-11-02, `Nota #<número> <1 a 5>` registra a avaliação do atendimento de uma OS concluída do próprio telefone (uma vez só; o convite vai na notificação de conclusão enviada ao solicitante); qualquer outra mensagem recebe a mensagem de boas-vindas com os formatos. Não há nada aqui que o frontend precise chamar ou exibir — é tudo mensagem de WhatsApp, não API.
 
 ## 7. O que NÃO existe ainda (não tente consumir)
 
@@ -879,6 +885,6 @@ Para o frontend não implementar telas para funcionalidades inexistentes:
 ## 8. Referências
 
 - Código-fonte: `../src/main/java/br/com/fpo/sgc` (organização por domínio: `entity/repository/service+impl/controller/dto/mapper`).
-- Migrations: `src/main/resources/db/migration/V1` a `V19`.
+- Migrations: `src/main/resources/db/migration/V1` a `V20`.
 - Roadmap completo, decisões de arquitetura e status detalhado por requisito funcional: `PLANO_IMPLEMENTACAO_MVP.md` (raiz deste repositório).
 - Swagger UI ao vivo: `GET /swagger-ui.html` no ambiente rodando.

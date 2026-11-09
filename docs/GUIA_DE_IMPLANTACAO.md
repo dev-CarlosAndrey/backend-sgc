@@ -35,7 +35,7 @@ Toda a configuração de infraestrutura vem de variáveis de ambiente (`src/main
 
 ## 4. Migrações de banco
 
-O Flyway roda automaticamente na inicialização da aplicação (comportamento padrão do Spring Boot) — não é necessário executar nenhum comando manual de migração. Na primeira subida contra um banco vazio, todas as migrações `V1`–`V19` são aplicadas em sequência, incluindo a criação do usuário administrador de bootstrap (`V16`, login `admin` / senha `Admin@123`).
+O Flyway roda automaticamente na inicialização da aplicação (comportamento padrão do Spring Boot) — não é necessário executar nenhum comando manual de migração. Na primeira subida contra um banco vazio, todas as migrações `V1`–`V20` são aplicadas em sequência, incluindo a criação do usuário administrador de bootstrap (`V16`, login `admin` / senha `Admin@123`).
 
 **Checklist pós-primeira-subida**: trocar a senha do usuário `admin` antes de qualquer uso real ou demonstração exposta publicamente.
 

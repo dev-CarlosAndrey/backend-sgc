@@ -142,4 +142,33 @@ class ServiceOrderNotificationListenerTest {
 
         verifyNoInteractions(userRepository);
     }
+
+    @Test
+    void conclusao_convidaSoOSolicitanteComTelefoneAAvaliar() {
+        requester.setPhone("558899999999");
+        requester.setActive(true);
+        technician.setActive(true);
+        order(technician);
+
+        listener.onServiceOrderEvent(new ServiceOrderEvent(10L, ServiceOrderEventType.RESOLVED, ServiceOrderStatus.RESOLVED));
+
+        ArgumentCaptor<String> toRequester = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> toTechnician = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).notifyUser(any(), eq(requester), any(), toRequester.capture(), any());
+        verify(notificationService).notifyUser(any(), eq(technician), any(), toTechnician.capture(), any());
+        assertTrue(toRequester.getValue().contains("Nota #10"));
+        assertFalse(toTechnician.getValue().contains("Nota #10"));
+    }
+
+    @Test
+    void conclusao_solicitanteSemTelefoneNaoRecebeConvite() {
+        requester.setActive(true);
+        order(null);
+
+        listener.onServiceOrderEvent(new ServiceOrderEvent(10L, ServiceOrderEventType.RESOLVED, ServiceOrderStatus.RESOLVED));
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).notifyUser(any(), eq(requester), any(), message.capture(), any());
+        assertFalse(message.getValue().contains("Nota #"));
+    }
 }

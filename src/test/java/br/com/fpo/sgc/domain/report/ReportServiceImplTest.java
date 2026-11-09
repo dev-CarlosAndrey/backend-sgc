@@ -144,6 +144,26 @@ class ReportServiceImplTest {
     }
 
     @Test
+    void relatorioDeOs_calculaNotaMediaGeralEPorTecnico() {
+        User ana = User.builder().id(10L).name("Ana").build();
+        User bruno = User.builder().id(11L).name("Bruno").build();
+        ServiceOrder os1 = order(1, ServiceOrderStatus.RESOLVED, ServiceOrderPriority.LOW, ana, null, "2026-09-01T10:00:00Z", "2026-09-01T11:00:00Z", null);
+        ServiceOrder os2 = order(2, ServiceOrderStatus.RESOLVED, ServiceOrderPriority.LOW, ana, null, "2026-09-02T10:00:00Z", "2026-09-02T11:00:00Z", null);
+        ServiceOrder os3 = order(3, ServiceOrderStatus.RESOLVED, ServiceOrderPriority.LOW, bruno, null, "2026-09-03T10:00:00Z", "2026-09-03T11:00:00Z", null);
+        os1.setRating(5);
+        os2.setRating(4);
+        // OS 3 não avaliada: não entra na média
+        when(serviceOrderRepository.findForReport(any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of(os1, os2, os3));
+
+        ServiceOrderReportDTO report = service.serviceOrdersReport(ALL);
+
+        assertEquals(2, report.ratedOrders());
+        assertEquals(4.5, report.avgRating());
+        assertEquals(4.5, report.byTechnician().stream().filter(t -> t.technicianName().equals("Ana")).findFirst().orElseThrow().avgRating());
+        assertNull(report.byTechnician().stream().filter(t -> t.technicianName().equals("Bruno")).findFirst().orElseThrow().avgRating());
+    }
+
+    @Test
     void relatorioDeOs_semOrdens_retornaZerosENulos() {
         when(serviceOrderRepository.findForReport(any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of());
 
@@ -153,6 +173,8 @@ class ReportServiceImplTest {
         assertEquals(BigDecimal.ZERO, report.totalCost());
         assertNull(report.avgResolutionHours());
         assertTrue(report.byTechnician().isEmpty());
+        assertEquals(0, report.ratedOrders());
+        assertNull(report.avgRating());
     }
 
     @Test
