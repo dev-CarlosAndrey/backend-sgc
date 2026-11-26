@@ -40,4 +40,15 @@ public class Notification extends BaseEntity {
 
     @Column(name = "error_message", length = 500)
     private String errorMessage;
+
+    // Id da mensagem no provedor (wamid), para casar o status "failed" que a Meta envia depois por webhook.
+    @Column(name = "provider_message_id", length = 128)
+    private String providerMessageId;
+
+    // Assunto e texto enviados pelo WhatsApp, guardados para reenviar pelo e-mail se a Meta informar falha.
+    @Column(length = 255)
+    private String subject;
+
+    @Column(name = "message_body", length = 2000)
+    private String messageBody;
 }

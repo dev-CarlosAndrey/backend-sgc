@@ -31,6 +31,14 @@ class EmailNotificationSenderTest {
     }
 
     @Test
+    void canSend_emailSinteticoDoAutocadastroPeloWhatsApp_naoEnvia() {
+        User autocadastrado = User.builder().name("Maria").email("whatsapp+5588999999999@sgc.local").build();
+
+        assertFalse(sender.canSend(autocadastrado));
+        assertTrue(sender.canSend(user));
+    }
+
+    @Test
     void enviaPayloadCorretoParaOSendGrid() {
         server.expect(requestTo("https://api.sendgrid.com/v3/mail/send"))
                 .andExpect(method(POST))

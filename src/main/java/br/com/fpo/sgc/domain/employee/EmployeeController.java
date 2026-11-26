@@ -25,6 +25,8 @@ public class EmployeeController {
         return ResponseEntity.status(HttpStatus.CREATED).body(employeeService.create(dto));
     }
 
+    // Expõe e-mail, telefone (e CPF, em funcionários): leitura restrita ao ADMIN (LGPD, art. 6º, III).
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
     public ResponseEntity<Page<EmployeeResponseDTO>> findAll(
             @RequestParam(required = false) String q,
@@ -34,6 +36,7 @@ public class EmployeeController {
         return ResponseEntity.ok(employeeService.findAll(q, sectorId, active, pageable));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/{id}")
     public ResponseEntity<EmployeeResponseDTO> findById(@PathVariable Long id) {
         return ResponseEntity.ok(employeeService.findById(id));

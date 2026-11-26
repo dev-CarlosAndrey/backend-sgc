@@ -4,6 +4,7 @@ import br.com.fpo.sgc.domain.serviceorder.ServiceOrderStatus;
 import br.com.fpo.sgc.domain.user.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -14,6 +15,7 @@ import static org.springframework.http.HttpStatus.OK;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class WhatsAppNotificationSenderTest {
 
@@ -53,6 +55,24 @@ class WhatsAppNotificationSenderTest {
                 .andRespond(withStatus(UNAUTHORIZED));
 
         assertThrows(RestClientResponseException.class, () -> sender.send(user, "s", "m", ServiceOrderStatus.OPEN));
+    }
+
+    @Test
+    void send_devolveOWamidInformadoPelaMeta() {
+        server.expect(requestTo("https://graph.facebook.com/v22.0/" + PHONE_NUMBER_ID + "/messages"))
+                .andRespond(withSuccess(
+                        "{\"messaging_product\":\"whatsapp\",\"contacts\":[{\"input\":\"85999990000\",\"wa_id\":\"5585999990000\"}],\"messages\":[{\"id\":\"wamid.HBgM\"}]}",
+                        MediaType.APPLICATION_JSON));
+
+        assertEquals("wamid.HBgM", sender.send(user, "s", "m", ServiceOrderStatus.OPEN));
+    }
+
+    @Test
+    void extractMessageId_respostaVaziaOuInesperada_devolveNull() {
+        assertNull(sender.extractMessageId(null));
+        assertNull(sender.extractMessageId(""));
+        assertNull(sender.extractMessageId("{\"messages\":[]}"));
+        assertNull(sender.extractMessageId("não é json"));
     }
 
     @Test

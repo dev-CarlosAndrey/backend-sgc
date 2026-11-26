@@ -57,11 +57,18 @@ public class EmailNotificationSender implements NotificationSender {
 
     @Override
     public boolean canSend(User recipient) {
-        return isConfigured() && recipient.getEmail() != null && !recipient.getEmail().isBlank();
+        return isConfigured() && recipient.getEmail() != null && !recipient.getEmail().isBlank()
+                && !isSyntheticEmail(recipient.getEmail());
+    }
+
+    // Usuários autocadastrados pelo WhatsApp recebem um e-mail fictício (whatsapp+<telefone>@sgc.local) só
+    // para satisfazer a unicidade; enviar para ele "daria certo" no SendGrid sem ninguém receber.
+    static boolean isSyntheticEmail(String email) {
+        return email.startsWith("whatsapp+") && email.endsWith("@sgc.local");
     }
 
     @Override
-    public void send(User recipient, String subject, String message, ServiceOrderStatus status) {
+    public String send(User recipient, String subject, String message, ServiceOrderStatus status) {
         Map<String, Object> body = Map.of(
                 "personalizations", List.of(Map.of("to", List.of(
                         Map.of("email", recipient.getEmail(), "name", recipient.getName())))),
@@ -80,6 +87,7 @@ public class EmailNotificationSender implements NotificationSender {
                 .body(body)
                 .retrieve()
                 .toBodilessEntity();
+        return null;
     }
 
     // Ignora vazio e o placeholder de exemplo.

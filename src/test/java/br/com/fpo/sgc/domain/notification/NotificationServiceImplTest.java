@@ -79,7 +79,7 @@ class NotificationServiceImplTest {
 
     @Test
     void whatsappFalhaUmaVez_recuperaNaRetentativaSemEmail() {
-        doThrow(new RuntimeException("timeout")).doNothing().when(whatsapp).send(any(), any(), any(), any());
+        doThrow(new RuntimeException("timeout")).doReturn(null).when(whatsapp).send(any(), any(), any(), any());
 
         assertTrue(service(true, whatsapp, email).notifyUser(order, user, "s", "m", ServiceOrderStatus.OPEN));
 
@@ -100,8 +100,78 @@ class NotificationServiceImplTest {
 
         assertTrue(service(true, whatsapp, email).notifyUser(order, user, "s", "m", ServiceOrderStatus.OPEN));
 
-        List<Notification> records = saved(4);
+        // 401 não é transitório: uma única tentativa no WhatsApp e segue direto para o e-mail.
+        verify(whatsapp, times(1)).send(any(), any(), any(), any());
+        List<Notification> records = saved(2);
         assertEquals(corpoDeErro, records.get(0).getErrorMessage());
+        assertEquals(NotificationChannel.EMAIL, records.get(1).getChannel());
+    }
+
+    @Test
+    void falhaHttp429_eTransitoria_eRetenta() {
+        RestClientResponseException exception = new RestClientResponseException(
+                "429 Too Many Requests", 429, "Too Many Requests", new HttpHeaders(), new byte[0], StandardCharsets.UTF_8);
+        doThrow(exception).doReturn("wamid.ok").when(whatsapp).send(any(), any(), any(), any());
+
+        assertTrue(service(true, whatsapp, email).notifyUser(order, user, "s", "m", ServiceOrderStatus.OPEN));
+
+        verify(whatsapp, times(2)).send(any(), any(), any(), any());
+        verify(email, never()).send(any(), any(), any(), any());
+    }
+
+    @Test
+    void whatsappSucesso_guardaWamidEConteudoParaFallbackAssincrono() {
+        when(whatsapp.send(any(), any(), any(), any())).thenReturn("wamid.123");
+
+        service(true, whatsapp, email).notifyUser(order, user, "Assunto", "Mensagem", ServiceOrderStatus.OPEN);
+
+        Notification record = saved(1).get(0);
+        assertEquals("wamid.123", record.getProviderMessageId());
+        assertEquals("Assunto", record.getSubject());
+        assertEquals("Mensagem", record.getMessageBody());
+    }
+
+    @Test
+    void falhaAssincrona_marcaWhatsAppComoFalhaEReenviaPorEmail() {
+        order.setStatus(ServiceOrderStatus.IN_PROGRESS);
+        Notification enviada = Notification.builder().id(9L).serviceOrder(order).recipient(user)
+                .channel(NotificationChannel.WHATSAPP).deliveryStatus(NotificationStatus.SENT).attempt(1)
+                .providerMessageId("wamid.123").subject("Assunto").messageBody("Mensagem").build();
+        when(repository.findByProviderMessageIdFetchingOrderAndRecipient("wamid.123", NotificationChannel.WHATSAPP))
+                .thenReturn(List.of(enviada));
+
+        service(true, whatsapp, email).handleAsyncDeliveryFailure("wamid.123", "131047 Re-engagement message");
+
+        assertEquals(NotificationStatus.FAILED, enviada.getDeliveryStatus());
+        assertTrue(enviada.getErrorMessage().contains("131047"));
+        verify(email).send(user, "Assunto", "Mensagem", ServiceOrderStatus.IN_PROGRESS);
+        List<Notification> records = saved(2);
+        assertEquals(NotificationChannel.EMAIL, records.get(1).getChannel());
+        assertEquals(NotificationStatus.SENT, records.get(1).getDeliveryStatus());
+    }
+
+    @Test
+    void falhaAssincronaRepetida_naoReenviaDeNovo() {
+        Notification jaFalhou = Notification.builder().serviceOrder(order).recipient(user)
+                .channel(NotificationChannel.WHATSAPP).deliveryStatus(NotificationStatus.FAILED).attempt(1)
+                .providerMessageId("wamid.123").messageBody("Mensagem").build();
+        when(repository.findByProviderMessageIdFetchingOrderAndRecipient("wamid.123", NotificationChannel.WHATSAPP))
+                .thenReturn(List.of(jaFalhou));
+
+        service(true, whatsapp, email).handleAsyncDeliveryFailure("wamid.123", "erro");
+
+        verify(email, never()).send(any(), any(), any(), any());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void falhaAssincronaDeMensagemDesconhecida_eIgnorada() {
+        when(repository.findByProviderMessageIdFetchingOrderAndRecipient(any(), any())).thenReturn(List.of());
+
+        service(true, whatsapp, email).handleAsyncDeliveryFailure("wamid.resposta-automatica", "erro");
+
+        verify(email, never()).send(any(), any(), any(), any());
+        verify(repository, never()).save(any());
     }
 
     @Test

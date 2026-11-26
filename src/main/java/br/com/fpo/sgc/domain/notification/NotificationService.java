@@ -15,4 +15,15 @@ public interface NotificationService {
      */
     boolean notifyUser(ServiceOrder serviceOrder, User recipient, String subject, String message,
                        ServiceOrderStatus status);
+
+    /**
+     * Trata a falha de entrega que a Meta informa depois do envio, pelo webhook (status "failed"): a Cloud
+     * API responde 200 ao aceitar a mensagem, mas a entrega pode falhar em seguida (ex.: fora da janela de
+     * 24 h). Marca a tentativa do WhatsApp como falha e, com o fallback habilitado, reenvia por e-mail (RN08).
+     * Ids desconhecidos (respostas automáticas, que não são notificações de OS) são ignorados.
+     *
+     * @param providerMessageId id da mensagem na Meta (wamid)
+     * @param errorDetail       descrição do erro informada no webhook (pode ser null)
+     */
+    void handleAsyncDeliveryFailure(String providerMessageId, String errorDetail);
 }

@@ -23,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -57,6 +58,11 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
     @Override
     @Transactional
     public ServiceOrderResponseDTO create(ServiceOrderRequestDTO dto, ServiceOrderChannel channel) {
+        Long ownerId = requesterScope();
+        if (ownerId != null && !ownerId.equals(dto.requesterId())) {
+            throw new AccessDeniedException("Solicitantes só podem abrir ordens de serviço em seu próprio nome.");
+        }
+
         User requester = userRepository.findById(dto.requesterId())
                 .orElseThrow(() -> new EntityNotFoundException("Solicitante não encontrado com ID: " + dto.requesterId()));
 
@@ -97,13 +103,14 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
     public ServiceOrderResponseDTO findById(Long id) {
         ServiceOrder so = serviceOrderRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Ordem de serviço não encontrada com ID: " + id));
+        checkOwnership(so);
         return serviceOrderMapper.toDTO(so);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<ServiceOrderResponseDTO> findAll(String q, ServiceOrderStatus status, ServiceOrderChannel channel, Pageable pageable) {
-        return serviceOrderRepository.search(SearchTerm.toLikePattern(q), status, channel, pageable).map(serviceOrderMapper::toDTO);
+        return serviceOrderRepository.search(SearchTerm.toLikePattern(q), status, channel, requesterScope(), pageable).map(serviceOrderMapper::toDTO);
     }
 
     @Override
@@ -121,6 +128,10 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
     @Override
     @Transactional(readOnly = true)
     public Page<ServiceOrderResponseDTO> findByRequesterId(Long requesterId, Pageable pageable) {
+        Long ownerId = requesterScope();
+        if (ownerId != null && !ownerId.equals(requesterId)) {
+            throw new AccessDeniedException("Você só pode consultar as suas próprias ordens de serviço.");
+        }
         return serviceOrderRepository.findByRequesterIdAndActiveTrue(requesterId, pageable).map(serviceOrderMapper::toDTO);
     }
 
@@ -301,9 +312,9 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
     @Override
     @Transactional(readOnly = true)
     public Page<ServiceOrderStatusLogResponseDTO> findStatusHistory(Long id, Pageable pageable) {
-        if (!serviceOrderRepository.existsById(id)) {
-            throw new EntityNotFoundException("Ordem de serviço não encontrada com ID: " + id);
-        }
+        ServiceOrder so = serviceOrderRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Ordem de serviço não encontrada com ID: " + id));
+        checkOwnership(so);
         return statusLogRepository.findByServiceOrderIdAndActiveTrue(id, pageable)
                 .map(ServiceOrderStatusLogResponseDTO::fromEntity);
     }
@@ -331,6 +342,31 @@ public class ServiceOrderServiceImpl implements ServiceOrderService {
                 .changedBy(currentUser())
                 .note(note)
                 .build());
+    }
+
+    // Escopo por dono (RF16/RNF22): o perfil USER (solicitante) só enxerga e abre as próprias OS; ADMIN e
+    // TECHNICIAN veem todas. Retorna o id do solicitante a filtrar, ou null quando não há restrição. Chamadas
+    // sem usuário logado (fluxo do webhook do WhatsApp, que já confere o dono pelo telefone) também retornam null.
+    private Long requesterScope() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            return null;
+        }
+        boolean requesterOnly = auth.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_USER".equals(authority.getAuthority()));
+        if (!requesterOnly) {
+            return null;
+        }
+        return userRepository.findByNameAndActiveTrue(auth.getName())
+                .map(User::getId)
+                .orElseThrow(() -> new AccessDeniedException("Usuário autenticado não encontrado ou inativo."));
+    }
+
+    private void checkOwnership(ServiceOrder so) {
+        Long ownerId = requesterScope();
+        if (ownerId != null && !ownerId.equals(so.getRequester().getId())) {
+            throw new AccessDeniedException("Você só pode acessar as suas próprias ordens de serviço.");
+        }
     }
 
     // Usuário autenticado na requisição; "SYSTEM" quando não há (mesmo critério do AuditLogServiceImpl).

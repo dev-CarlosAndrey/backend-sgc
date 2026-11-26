@@ -26,11 +26,14 @@ public class UserController {
         return ResponseEntity.status(HttpStatus.CREATED).body(createdUser);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/{id}")
     public ResponseEntity<UserResponseDTO> findById(@PathVariable Long id) {
         return ResponseEntity.ok(userService.findById(id));
     }
 
+    // Expõe e-mail, telefone (e CPF, em funcionários): leitura restrita ao ADMIN (LGPD, art. 6º, III).
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
     public ResponseEntity<Page<UserResponseDTO>> findAll(
             @RequestParam(required = false) String q,
