@@ -37,7 +37,12 @@ public record WhatsAppWebhookPayload(String object, List<Entry> entry) {
             String id,
             String status,
             String timestamp,
-            @JsonProperty("recipient_id") String recipientId) {}
+            @JsonProperty("recipient_id") String recipientId,
+            List<StatusError> errors) {}
+
+    // Presente nos status "failed": código e descrição do erro de entrega (ex.: 131047, fora da janela de 24 h).
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record StatusError(Integer code, String title, String message) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Contact(@JsonProperty("wa_id") String waId, Profile profile) {}

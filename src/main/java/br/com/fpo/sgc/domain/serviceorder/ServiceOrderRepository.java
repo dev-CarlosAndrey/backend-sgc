@@ -60,11 +60,12 @@ public interface ServiceOrderRepository extends JpaRepository<ServiceOrder, Long
     BigDecimal sumMaintenanceCostByCompanyId(@Param("companyId") Long companyId);
 
     // Listagem com busca e filtros opcionais (null = sem filtro). `q` já chega como padrão LIKE
-    // montado por SearchTerm.toLikePattern.
+    // montado por SearchTerm.toLikePattern. `requesterId` restringe ao solicitante (perfil USER).
     @Query("SELECT so FROM ServiceOrder so JOIN so.requester r JOIN so.sector s " +
             "WHERE so.active = true " +
             "AND (:status IS NULL OR so.status = :status) " +
             "AND (:channel IS NULL OR so.channel = :channel) " +
+            "AND (:requesterId IS NULL OR r.id = :requesterId) " +
             "AND (:q IS NULL " +
             "OR LOWER(so.title) LIKE :q ESCAPE '!' " +
             "OR LOWER(r.name) LIKE :q ESCAPE '!' " +
@@ -72,5 +73,6 @@ public interface ServiceOrderRepository extends JpaRepository<ServiceOrder, Long
     Page<ServiceOrder> search(@Param("q") String q,
                               @Param("status") ServiceOrderStatus status,
                               @Param("channel") ServiceOrderChannel channel,
+                              @Param("requesterId") Long requesterId,
                               Pageable pageable);
 }

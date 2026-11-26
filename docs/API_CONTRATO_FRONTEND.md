@@ -1,6 +1,6 @@
 # Contrato da API — SGC API (para consumo pelo frontend)
 
-> Atualizado em 2026-11-02 (avaliação do atendimento: campo `rating` na OS e nota média no relatório de OS, ver 6.10 e 6.16). Anterior: 2026-10-18 (busca `q` e filtros opcionais nas listagens, ver 3.1; corpo de `PATCH /service-orders/{id}/resolve` documentado como `text/plain`, ver 6.10; antes, 2026-10-12), a partir do código-fonte real de `../src/main/java/br/com/fpo/sgc` e das migrations `V1–V19`, e conferido contra respostas reais da API rodando (formato de paginação, filtros, CSV, RBAC, CORS). Descreve o que existe e funciona hoje no backend — sem especulação sobre funcionalidades futuras. Cobre o núcleo administrativo (Fase 1), as notificações por e-mail **e por WhatsApp**, os relatórios (CSV e PDF) e o tratamento de erro endurecido em 2026-10-12 (seção 3.2). Desde 2026-10-02, OS também podem nascer de uma mensagem de WhatsApp e ser consultadas por lá (RF15/RF16, ver 6.10/6.17) — o frontend vai ver essas OS misturadas nas mesmas listagens, com `channel: "WHATSAPP"`. Os quatro requisitos funcionais do WhatsApp (RF14–RF17) estão concluídos; não há endpoint novo que o frontend precise chamar por causa disso — é tudo mensagem de WhatsApp. Ver `PLANO_IMPLEMENTACAO_MVP.md` para o roadmap completo.
+> Atualizado em 2026-11-26 (controle de acesso por perfil e por dono: `/users` e `/employees` só ADMIN; `USER` só vê e abre as próprias OS, ver seção 4). Anterior: 2026-11-02 (avaliação do atendimento: campo `rating` na OS e nota média no relatório de OS, ver 6.10 e 6.16). Anterior: 2026-10-18 (busca `q` e filtros opcionais nas listagens, ver 3.1; corpo de `PATCH /service-orders/{id}/resolve` documentado como `text/plain`, ver 6.10; antes, 2026-10-12), a partir do código-fonte real de `../src/main/java/br/com/fpo/sgc` e das migrations `V1–V19`, e conferido contra respostas reais da API rodando (formato de paginação, filtros, CSV, RBAC, CORS). Descreve o que existe e funciona hoje no backend — sem especulação sobre funcionalidades futuras. Cobre o núcleo administrativo (Fase 1), as notificações por e-mail **e por WhatsApp**, os relatórios (CSV e PDF) e o tratamento de erro endurecido em 2026-10-12 (seção 3.2). Desde 2026-10-02, OS também podem nascer de uma mensagem de WhatsApp e ser consultadas por lá (RF15/RF16, ver 6.10/6.17) — o frontend vai ver essas OS misturadas nas mesmas listagens, com `channel: "WHATSAPP"`. Os quatro requisitos funcionais do WhatsApp (RF14–RF17) estão concluídos; não há endpoint novo que o frontend precise chamar por causa disso — é tudo mensagem de WhatsApp. Ver `PLANO_IMPLEMENTACAO_MVP.md` para o roadmap completo.
 
 ## 1. Visão geral
 
@@ -142,8 +142,11 @@ Política implementada (`@PreAuthorize` a nível de método, habilitado via `@En
 
 | Módulo | Leitura (GET) | Escrita (POST/PUT/PATCH/DELETE) |
 |---|---|---|
-| Usuários, Empresas, Prédios, Setores, Funcionários, Marcas, Materiais, Produtos, Categorias de Bem, Ativos (incl. upload de foto/logo), Movimentações de Ativo | Qualquer autenticado | **ADMIN** |
-| Ordem de Serviço — abrir (`POST`) | — | Qualquer autenticado (`ADMIN`/`TECHNICIAN`/`USER`) |
+| Usuários e Funcionários (dados pessoais: e-mail, telefone, CPF) | **ADMIN** (desde 2026-11-26, LGPD) | **ADMIN** |
+| Empresas, Prédios, Setores, Marcas, Materiais, Produtos, Categorias de Bem, Ativos (incl. upload de foto/logo), Movimentações de Ativo | Qualquer autenticado | **ADMIN** |
+| Ordem de Serviço — listar, buscar por ID, histórico, por solicitante | `ADMIN`/`TECHNICIAN`: todas; `USER`: **só as próprias** (403 nas alheias, desde 2026-11-26) | — |
+| Ordem de Serviço — listar por bem, status, técnico, período | **ADMIN** ou **TECHNICIAN** | — |
+| Ordem de Serviço — abrir (`POST`) | — | Qualquer autenticado; `USER` só em nome próprio (`requesterId` = ele mesmo, senão 403) |
 | Ordem de Serviço — atribuir técnico, excluir | Qualquer autenticado | **ADMIN** |
 | Ordem de Serviço — resolver, alterar status (`PATCH /{id}/status`) | — | **ADMIN** ou **TECHNICIAN** |
 | Ordem de Serviço — consultas (por status/solicitante/técnico/bem/período/id/lista) e histórico de status | Qualquer autenticado | — |
@@ -179,8 +182,8 @@ Nas tabelas abaixo, **Auth** indica o requisito de acesso: `Autenticado` (qualqu
 | Método | Path | Auth | Descrição |
 |---|---|---|---|
 | POST | `/` | ADMIN | Cria usuário. Body: `UserRequestDTO` |
-| GET | `/{id}` | Autenticado | Busca por ID |
-| GET | `/` | Autenticado | Lista paginada (`size=10`, `sort=name`). Filtros opcionais: `q` (nome ou e-mail), `role` (`Role`) |
+| GET | `/{id}` | ADMIN | Busca por ID |
+| GET | `/` | ADMIN | Lista paginada (`size=10`, `sort=name`). Filtros opcionais: `q` (nome ou e-mail), `role` (`Role`) |
 | PUT | `/{id}` | ADMIN | Atualiza. Body: `UserRequestDTO` |
 | DELETE | `/{id}` | ADMIN | Soft delete |
 
@@ -324,8 +327,8 @@ Nas tabelas abaixo, **Auth** indica o requisito de acesso: `Autenticado` (qualqu
 | Método | Path | Auth | Descrição |
 |---|---|---|---|
 | POST | `/` | ADMIN | Cria funcionário. Body: `EmployeeRequestDTO` |
-| GET | `/` | Autenticado | Lista paginada (`size=20`). Filtros opcionais: `q` (nome, CPF ou matrícula), `sectorId`, `active` (`true`/`false`). ⚠️ Sem `active`, lista **ativos e inativos** (exceção à regra da seção 3.3) |
-| GET | `/{id}` | Autenticado | Busca por ID |
+| GET | `/` | ADMIN | Lista paginada (`size=20`). Filtros opcionais: `q` (nome, CPF ou matrícula), `sectorId`, `active` (`true`/`false`). ⚠️ Sem `active`, lista **ativos e inativos** (exceção à regra da seção 3.3) |
+| GET | `/{id}` | ADMIN | Busca por ID |
 | PUT | `/{id}` | ADMIN | Atualiza |
 | DELETE | `/{id}` | ADMIN | Soft delete |
 
@@ -492,14 +495,14 @@ O setor de origem é inferido automaticamente a partir do setor atual do bem no 
 | Método | Path | Auth | Descrição |
 |---|---|---|---|
 | POST | `/` | Autenticado | Abre chamado. Body: `ServiceOrderRequestDTO` |
-| GET | `/{id}` | Autenticado | Busca por ID |
-| GET | `/` | Autenticado | Lista paginada (`size=10`, `sort=createdAt` — envie `sort=createdAt,desc` para as mais recentes primeiro). Filtros opcionais e combináveis: `q` (título, nome do solicitante ou do setor), `status` (`ServiceOrderStatus`), `channel` (`ServiceOrderChannel`) |
-| GET | `/asset/{assetId}` | Autenticado | **Histórico de manutenção do bem** — todas as OS vinculadas a ele |
-| GET | `/status/{status}` | Autenticado | Lista paginada por status |
-| GET | `/requester/{requesterId}` | Autenticado | Lista paginada por solicitante |
-| GET | `/technician/{technicianId}` | Autenticado | Lista paginada por técnico |
-| GET | `/period?from=2026-09-01&to=2026-09-30&field=OPENED` | Autenticado | Lista paginada por período (ver abaixo) |
-| GET | `/{id}/status-history` | Autenticado | Histórico de mudanças de status da OS (paginado) |
+| GET | `/{id}` | Autenticado (USER: só as próprias) | Busca por ID |
+| GET | `/` | Autenticado (USER: só as próprias) | Lista paginada (`size=10`, `sort=createdAt` — envie `sort=createdAt,desc` para as mais recentes primeiro). Filtros opcionais e combináveis: `q` (título, nome do solicitante ou do setor), `status` (`ServiceOrderStatus`), `channel` (`ServiceOrderChannel`) |
+| GET | `/asset/{assetId}` | ADMIN/TECHNICIAN | **Histórico de manutenção do bem** — todas as OS vinculadas a ele |
+| GET | `/status/{status}` | ADMIN/TECHNICIAN | Lista paginada por status |
+| GET | `/requester/{requesterId}` | Autenticado (USER: só as próprias) | Lista paginada por solicitante |
+| GET | `/technician/{technicianId}` | ADMIN/TECHNICIAN | Lista paginada por técnico |
+| GET | `/period?from=2026-09-01&to=2026-09-30&field=OPENED` | ADMIN/TECHNICIAN | Lista paginada por período (ver abaixo) |
+| GET | `/{id}/status-history` | Autenticado (USER: só as próprias) | Histórico de mudanças de status da OS (paginado) |
 | PATCH | `/{id}/assign-technician/{technicianId}` | ADMIN | Atribui técnico, muda status para `IN_PROGRESS` |
 | PATCH | `/{id}/resolve?cost=150.75` (query param `cost` opcional) | ADMIN ou TECHNICIAN | Resolve a OS, muda status para `RESOLVED` |
 | PATCH | `/{id}/status` | ADMIN ou TECHNICIAN | Altera o status para `IN_PROGRESS` ou `CANCELLED` (ver abaixo) |

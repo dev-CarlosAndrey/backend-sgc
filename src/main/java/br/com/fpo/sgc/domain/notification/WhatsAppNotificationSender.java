@@ -1,5 +1,8 @@
 package br.com.fpo.sgc.domain.notification;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import br.com.fpo.sgc.domain.serviceorder.ServiceOrderStatus;
 import br.com.fpo.sgc.domain.user.User;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +26,8 @@ import java.util.Map;
 @Slf4j
 @Component
 public class WhatsAppNotificationSender implements NotificationSender {
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final RestClient restClient;
     private final String accessToken;
@@ -57,15 +62,17 @@ public class WhatsAppNotificationSender implements NotificationSender {
     }
 
     @Override
-    public void send(User recipient, String subject, String message, ServiceOrderStatus status) {
+    public String send(User recipient, String subject, String message, ServiceOrderStatus status) {
         String to = recipient.getPhone().replaceAll("\\D", "");
         String text = subject == null || subject.isBlank() ? message : subject + "\n\n" + message;
-        sendText(to, text);
+        return sendText(to, text);
     }
 
     // Reaproveitado pelo WhatsAppAutoReplyService (RF14): o destinatário de uma resposta automática no
     // webhook não é necessariamente um User cadastrado, então o envio cru por telefone fica público aqui.
-    public void sendText(String toPhoneDigitsOnly, String text) {
+    // Devolve o id da mensagem (wamid) informado pela Meta, ou null se a resposta não o trouxer. O 200 só
+    // significa "aceita": a entrega pode falhar depois e chegar como status "failed" no webhook (RN08).
+    public String sendText(String toPhoneDigitsOnly, String text) {
         Map<String, Object> body = Map.of(
                 "messaging_product", "whatsapp",
                 "to", toPhoneDigitsOnly,
@@ -75,13 +82,28 @@ public class WhatsAppNotificationSender implements NotificationSender {
         // 200 em caso de sucesso; 4xx/5xx (token expirado, número restrito, limite excedido...) viram
         // RestClientResponseException, tratada pelo NotificationService (retentativa e fallback por e-mail)
         // ou pelo WhatsAppAutoReplyService (que só loga, pois não há fallback para uma resposta automática).
-        restClient.post()
+        String response = restClient.post()
                 .uri("/{phoneNumberId}/messages", phoneNumberId)
                 .header("Authorization", "Bearer " + accessToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body)
                 .retrieve()
-                .toBodilessEntity();
+                .body(String.class);
+        return extractMessageId(response);
+    }
+
+    // Resposta da Cloud API: {"messaging_product":"whatsapp","contacts":[...],"messages":[{"id":"wamid..."}]}
+    String extractMessageId(String responseBody) {
+        if (responseBody == null || responseBody.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode id = objectMapper.readTree(responseBody).path("messages").path(0).path("id");
+            return id.isTextual() ? id.asText() : null;
+        } catch (JsonProcessingException e) {
+            log.warn("Resposta da Cloud API sem JSON válido; id da mensagem não registrado: {}", e.getMessage());
+            return null;
+        }
     }
 
     // Ignora vazio e o placeholder de exemplo do application.yml.

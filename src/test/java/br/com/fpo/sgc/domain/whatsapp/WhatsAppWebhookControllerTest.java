@@ -1,5 +1,7 @@
 package br.com.fpo.sgc.domain.whatsapp;
 
+import br.com.fpo.sgc.domain.notification.NotificationService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -10,10 +12,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 class WhatsAppWebhookControllerTest {
 
@@ -64,10 +70,43 @@ class WhatsAppWebhookControllerTest {
             }
             """;
 
-    private final WhatsAppAutoReplyService autoReplyService = mock(WhatsAppAutoReplyService.class);
+    private static final String FALHA_DE_ENTREGA = """
+            {
+              "object": "whatsapp_business_account",
+              "entry": [{
+                "id": "2170572843491811",
+                "changes": [{
+                  "field": "messages",
+                  "value": {
+                    "messaging_product": "whatsapp",
+                    "statuses": [{
+                      "id": "wamid.ghi",
+                      "status": "failed",
+                      "timestamp": "1700000000",
+                      "recipient_id": "558899999999",
+                      "errors": [{ "code": 131047, "title": "Re-engagement message", "message": "Re-engagement message" }]
+                    }]
+                  }
+                }]
+              }]
+            }
+            """;
 
-    private final WhatsAppWebhookController controller =
-            new WhatsAppWebhookController(new WhatsAppSignatureVerifier(APP_SECRET), autoReplyService, VERIFY_TOKEN);
+    private final WhatsAppAutoReplyService autoReplyService = mock(WhatsAppAutoReplyService.class);
+    private final WhatsAppInboundMessageRegistry inboundMessageRegistry = mock(WhatsAppInboundMessageRegistry.class);
+    private final NotificationService notificationService = mock(NotificationService.class);
+
+    private final WhatsAppWebhookController controller = controller(VERIFY_TOKEN);
+
+    @BeforeEach
+    void setUp() {
+        when(inboundMessageRegistry.registerIfNew(any(), any())).thenReturn(true);
+    }
+
+    private WhatsAppWebhookController controller(String verifyToken) {
+        return new WhatsAppWebhookController(new WhatsAppSignatureVerifier(APP_SECRET), autoReplyService,
+                inboundMessageRegistry, notificationService, verifyToken);
+    }
 
     @Test
     void verify_aceitaDesafioComTokenCorreto() {
@@ -93,8 +132,7 @@ class WhatsAppWebhookControllerTest {
 
     @Test
     void verify_semVerifyTokenConfigurado_sempreRejeita() {
-        WhatsAppWebhookController semToken =
-                new WhatsAppWebhookController(new WhatsAppSignatureVerifier(APP_SECRET), autoReplyService, "");
+        WhatsAppWebhookController semToken = controller("");
 
         ResponseEntity<String> response = semToken.verify("subscribe", "", "123456");
 
@@ -142,6 +180,31 @@ class WhatsAppWebhookControllerTest {
         controller.receive(sign(ATUALIZACAO_DE_STATUS), ATUALIZACAO_DE_STATUS);
 
         verifyNoInteractions(autoReplyService);
+    }
+
+    @Test
+    void receive_mensagemJaProcessada_naoProcessaDeNovo() {
+        when(inboundMessageRegistry.registerIfNew("wamid.abc", "558899999999")).thenReturn(false);
+
+        ResponseEntity<Void> response = controller.receive(sign(MENSAGEM_RECEBIDA), MENSAGEM_RECEBIDA);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verifyNoInteractions(autoReplyService);
+    }
+
+    @Test
+    void receive_statusFailed_acionaFallbackComDescricaoDoErro() {
+        ResponseEntity<Void> response = controller.receive(sign(FALHA_DE_ENTREGA), FALHA_DE_ENTREGA);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(notificationService).handleAsyncDeliveryFailure(eq("wamid.ghi"), contains("131047"));
+    }
+
+    @Test
+    void receive_statusDelivered_naoAcionaFallback() {
+        controller.receive(sign(ATUALIZACAO_DE_STATUS), ATUALIZACAO_DE_STATUS);
+
+        verify(notificationService, never()).handleAsyncDeliveryFailure(any(), any());
     }
 
     @Test

@@ -5,6 +5,7 @@ import br.com.fpo.sgc.domain.serviceorder.ServiceOrderStatus;
 import br.com.fpo.sgc.domain.user.User;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientResponseException;
 
@@ -22,6 +23,8 @@ import java.util.Map;
 public class NotificationServiceImpl implements NotificationService {
 
     private static final int MAX_ERROR_LENGTH = 500;
+    private static final int MAX_SUBJECT_LENGTH = 255;
+    private static final int MAX_MESSAGE_LENGTH = 2000;
 
     private final Map<NotificationChannel, NotificationSender> senders = new EnumMap<>(NotificationChannel.class);
     private final NotificationRepository notificationRepository;
@@ -66,19 +69,78 @@ public class NotificationServiceImpl implements NotificationService {
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                sender.send(recipient, subject, message, status);
-                record(serviceOrder, recipient, channel, NotificationStatus.SENT, attempt, null);
+                String providerMessageId = sender.send(recipient, subject, message, status);
+                Notification sent = buildRecord(serviceOrder, recipient, channel, NotificationStatus.SENT, attempt, null);
+                if (channel == NotificationChannel.WHATSAPP) {
+                    // Guardados para o fallback assíncrono (handleAsyncDeliveryFailure).
+                    sent.setProviderMessageId(providerMessageId);
+                    sent.setSubject(truncate(subject, MAX_SUBJECT_LENGTH));
+                    sent.setMessageBody(truncate(message, MAX_MESSAGE_LENGTH));
+                }
+                notificationRepository.save(sent);
                 return true;
             } catch (Exception e) {
                 String detail = errorDetail(e);
                 log.warn("Falha ao notificar via {} (tentativa {}/{}): {}", channel, attempt, maxAttempts, detail);
                 record(serviceOrder, recipient, channel, NotificationStatus.FAILED, attempt, detail);
+                if (!isTransient(e)) {
+                    // Token inválido, número fora da lista, requisição malformada...: repetir não resolve.
+                    log.warn("Erro não transitório via {}: sem novas tentativas neste canal", channel);
+                    return false;
+                }
                 if (attempt < maxAttempts && !waitBeforeRetry(attempt)) {
                     return false;
                 }
             }
         }
         return false;
+    }
+
+    @Override
+    @Async
+    public void handleAsyncDeliveryFailure(String providerMessageId, String errorDetail) {
+        if (providerMessageId == null || providerMessageId.isBlank()) {
+            return;
+        }
+        List<Notification> matches = notificationRepository
+                .findByProviderMessageIdFetchingOrderAndRecipient(providerMessageId, NotificationChannel.WHATSAPP);
+        if (matches.isEmpty()) {
+            log.debug("Falha assíncrona do WhatsApp para mensagem sem notificação de OS associada ({})", providerMessageId);
+            return;
+        }
+        Notification whatsappAttempt = matches.get(0);
+        if (whatsappAttempt.getDeliveryStatus() == NotificationStatus.FAILED) {
+            // A Meta pode reenviar o mesmo evento: o fallback já foi tratado.
+            return;
+        }
+
+        String detail = "Falha informada pela Meta após o envio" + (errorDetail != null ? ": " + errorDetail : "");
+        whatsappAttempt.setDeliveryStatus(NotificationStatus.FAILED);
+        whatsappAttempt.setErrorMessage(truncate(detail, MAX_ERROR_LENGTH));
+        notificationRepository.save(whatsappAttempt);
+
+        ServiceOrder serviceOrder = whatsappAttempt.getServiceOrder();
+        User recipient = whatsappAttempt.getRecipient();
+        log.warn("Entrega da notificação da OS {} ao usuário {} falhou no WhatsApp ({}): {}",
+                serviceOrder.getId(), recipient.getId(), providerMessageId, detail);
+
+        if (!fallbackEnabled || whatsappAttempt.getMessageBody() == null) {
+            return;
+        }
+        if (!deliver(NotificationChannel.EMAIL, serviceOrder, recipient, whatsappAttempt.getSubject(),
+                whatsappAttempt.getMessageBody(), serviceOrder.getStatus())) {
+            log.warn("Notificação da OS {} não entregue ao usuário {} por nenhum canal após a falha assíncrona",
+                    serviceOrder.getId(), recipient.getId());
+        }
+    }
+
+    // 4xx (exceto 408 e 429) indica erro que não se resolve repetindo; 5xx, 408, 429 e falhas de rede, sim.
+    static boolean isTransient(Exception e) {
+        if (e instanceof RestClientResponseException responseException) {
+            int code = responseException.getStatusCode().value();
+            return code >= 500 || code == 408 || code == 429;
+        }
+        return true;
     }
 
     // Erros HTTP (token expirado, número restrito, limite de mensagens...) trazem o corpo de erro da API
@@ -103,15 +165,22 @@ public class NotificationServiceImpl implements NotificationService {
 
     private void record(ServiceOrder serviceOrder, User recipient, NotificationChannel channel,
                         NotificationStatus status, int attempt, String error) {
-        String truncated = error != null && error.length() > MAX_ERROR_LENGTH
-                ? error.substring(0, MAX_ERROR_LENGTH) : error;
-        notificationRepository.save(Notification.builder()
+        notificationRepository.save(buildRecord(serviceOrder, recipient, channel, status, attempt, error));
+    }
+
+    private Notification buildRecord(ServiceOrder serviceOrder, User recipient, NotificationChannel channel,
+                                     NotificationStatus status, int attempt, String error) {
+        return Notification.builder()
                 .serviceOrder(serviceOrder)
                 .recipient(recipient)
                 .channel(channel)
                 .deliveryStatus(status)
                 .attempt(attempt)
-                .errorMessage(truncated)
-                .build());
+                .errorMessage(truncate(error, MAX_ERROR_LENGTH))
+                .build();
+    }
+
+    private static String truncate(String value, int max) {
+        return value != null && value.length() > max ? value.substring(0, max) : value;
     }
 }

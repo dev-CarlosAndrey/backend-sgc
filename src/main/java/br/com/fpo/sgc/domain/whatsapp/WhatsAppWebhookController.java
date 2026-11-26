@@ -1,5 +1,6 @@
 package br.com.fpo.sgc.domain.whatsapp;
 
+import br.com.fpo.sgc.domain.notification.NotificationService;
 import br.com.fpo.sgc.domain.whatsapp.dto.WhatsAppWebhookPayload;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,14 +41,20 @@ public class WhatsAppWebhookController {
 
     private final WhatsAppSignatureVerifier signatureVerifier;
     private final WhatsAppAutoReplyService autoReplyService;
+    private final WhatsAppInboundMessageRegistry inboundMessageRegistry;
+    private final NotificationService notificationService;
     private final String verifyToken;
 
     public WhatsAppWebhookController(
             WhatsAppSignatureVerifier signatureVerifier,
             WhatsAppAutoReplyService autoReplyService,
+            WhatsAppInboundMessageRegistry inboundMessageRegistry,
+            NotificationService notificationService,
             @Value("${whatsapp.cloud-api.webhook-verify-token:}") String verifyToken) {
         this.signatureVerifier = signatureVerifier;
         this.autoReplyService = autoReplyService;
+        this.inboundMessageRegistry = inboundMessageRegistry;
+        this.notificationService = notificationService;
         this.verifyToken = verifyToken;
     }
 
@@ -95,6 +102,10 @@ public class WhatsAppWebhookController {
                     continue;
                 }
                 for (WhatsAppWebhookPayload.IncomingMessage message : orEmpty(value.messages())) {
+                    if (!inboundMessageRegistry.registerIfNew(message.id(), message.from())) {
+                        log.info("Mensagem {} do WhatsApp já processada (reenvio da Meta): ignorada", message.id());
+                        continue;
+                    }
                     String body = message.text() != null ? message.text().body() : null;
                     log.info("Mensagem recebida no WhatsApp de {} ({}): {}", message.from(), message.type(), body);
                     autoReplyService.handleIncomingMessage(message.from(), displayNameOf(message.from(), value.contacts()), body);
@@ -102,6 +113,10 @@ public class WhatsAppWebhookController {
                 for (WhatsAppWebhookPayload.MessageStatus status : orEmpty(value.statuses())) {
                     log.info("Atualização de status no WhatsApp: mensagem {} -> {} (destinatário {})",
                             status.id(), status.status(), status.recipientId());
+                    if ("failed".equals(status.status())) {
+                        // A entrega falhou depois do 200 do envio: marca a falha e aciona o e-mail (RN08).
+                        notificationService.handleAsyncDeliveryFailure(status.id(), describeErrors(status.errors()));
+                    }
                 }
             }
         }
@@ -114,6 +129,15 @@ public class WhatsAppWebhookController {
                 .map(contact -> contact.profile() != null ? contact.profile().name() : null)
                 .filter(name -> name != null && !name.isBlank())
                 .findFirst()
+                .orElse(null);
+    }
+
+    private String describeErrors(List<WhatsAppWebhookPayload.StatusError> errors) {
+        return orEmpty(errors).stream()
+                .map(error -> error.code() + " " + (error.title() != null ? error.title() : "")
+                        + (error.message() != null ? " - " + error.message() : ""))
+                .map(String::trim)
+                .reduce((a, b) -> a + "; " + b)
                 .orElse(null);
     }
 

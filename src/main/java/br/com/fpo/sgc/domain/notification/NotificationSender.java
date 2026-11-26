@@ -16,7 +16,8 @@ public interface NotificationSender {
 
     /**
      * Envia a mensagem; qualquer falha de entrega deve ser propagada como exceção. O status da OS permite
-     * ao canal adaptar a apresentação (cor, rótulo, progresso).
+     * ao canal adaptar a apresentação (cor, rótulo, progresso). Devolve o identificador da mensagem no
+     * provedor (ex.: wamid do WhatsApp), usado para casar falhas informadas depois por webhook, ou null.
      */
-    void send(User recipient, String subject, String message, ServiceOrderStatus status);
+    String send(User recipient, String subject, String message, ServiceOrderStatus status);
 }

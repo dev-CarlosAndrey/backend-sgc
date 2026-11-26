@@ -12,6 +12,15 @@ import java.util.List;
 
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
+
+    // Tentativa do WhatsApp aceita pela Meta com este wamid, já com OS e destinatário carregados: quem
+    // chama (NotificationServiceImpl) não é transacional, e o fallback lê os dados do destinatário.
+    @Query("SELECT n FROM Notification n JOIN FETCH n.serviceOrder JOIN FETCH n.recipient " +
+            "WHERE n.providerMessageId = :providerMessageId AND n.channel = :channel")
+    List<Notification> findByProviderMessageIdFetchingOrderAndRecipient(
+            @Param("providerMessageId") String providerMessageId,
+            @Param("channel") NotificationChannel channel);
+
     Page<Notification> findByServiceOrderIdAndActiveTrue(Long serviceOrderId, Pageable pageable);
 
     // Base do relatório de notificações: tentativas no período, ordenadas para que as tentativas de uma

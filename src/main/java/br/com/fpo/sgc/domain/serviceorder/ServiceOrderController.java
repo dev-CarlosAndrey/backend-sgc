@@ -44,6 +44,7 @@ public class ServiceOrderController {
         return ResponseEntity.ok(serviceOrderService.findAll(q, status, channel, pageable));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     @GetMapping("/asset/{assetId}")
     public ResponseEntity<Page<ServiceOrderResponseDTO>> findByAssetId(
             @PathVariable Long assetId,
@@ -51,6 +52,7 @@ public class ServiceOrderController {
         return ResponseEntity.ok(serviceOrderService.findByAssetId(assetId, pageable));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     @GetMapping("/status/{status}")
     public ResponseEntity<Page<ServiceOrderResponseDTO>> findByStatus(
             @PathVariable ServiceOrderStatus status,
@@ -65,6 +67,7 @@ public class ServiceOrderController {
         return ResponseEntity.ok(serviceOrderService.findByRequesterId(requesterId, pageable));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     @GetMapping("/technician/{technicianId}")
     public ResponseEntity<Page<ServiceOrderResponseDTO>> findByTechnicianId(
             @PathVariable Long technicianId,
@@ -73,6 +76,7 @@ public class ServiceOrderController {
     }
 
     // Datas inclusivas (yyyy-MM-dd); field = OPENED (data de abertura, padrão) ou CLOSED (data de conclusão/cancelamento).
+    @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     @GetMapping("/period")
     public ResponseEntity<Page<ServiceOrderResponseDTO>> findByPeriod(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
